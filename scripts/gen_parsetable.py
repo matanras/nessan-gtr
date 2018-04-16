@@ -4,7 +4,23 @@ class InstructionDescription(object):
 		self.instruction_size = instruction_size
 
 def is_instruction_supported(line):
-	return line[26] == 'X'
+	return len(line) > 26 and line[26] == 'X'
+
+def get_opcode(line):
+	opcode_text = line[2:4]
+	opcode = int(opcode_text, 16)
+	return opcode
+
+def get_instruction_mnemonic_with_format(line):
+	mnemonic_text = line[6:26].replace(' ', '')
+	# remove *
+	mnemonic_text = mnemonic_text.replace('*', '')
+	# replace all nearlabel/abcd/ab with %d
+	mnemonic_text = mnemonic_text.replace('nearlabel', '%d')
+	mnemonic_text = mnemonic_text.replace('abcd', '%d')
+	mnemonic_text = mnemonic_text.replace('ab', '%d')
+	mnemonic_text = mnemonic_text[:3] + ' ' + mnemonic_text[3:] if '%d' in mnemonic_text else mnemonic_text
+	return mnemonic_text
 
 def get_instruction_size(line):
 	operands_text = line[11:26].replace(' ', '')
@@ -34,18 +50,17 @@ def get_instruction_size(line):
 
 	return size
 
-def build_parse_table(data):
-	print 'static struct instruction_description opcode_to_insn_size[] = {'
+def build_opcode_to_insn_size(data):
+	print 'static uint8_t opcode_to_insn_size[] = {'
 	lines = data.split('\n')
 	instruction_descriptions = []
 	for line in lines:
-		opcode_text = line[2:4]
-		try:
-			opcode = int(opcode_text, 16)
-		except ValueError:
+		if (not is_instruction_supported(line)):
 			continue
 
-		if (not is_instruction_supported(line)):
+		try:
+			opcode = get_opcode(line)
+		except ValueError:
 			continue
 
 		instruction_size = get_instruction_size(line)
@@ -56,16 +71,52 @@ def build_parse_table(data):
 	for i in range(len(instruction_descriptions)):
 		# last entry should have no comma at the end
 		if i == len(instruction_descriptions) - 1:
-			print '\t{}'.format(instruction_descriptions[i].instruction_size)
+			print '\t[{}] = {}'.format(hex(instruction_descriptions[i].opcode),
+									   instruction_descriptions[i].instruction_size)
 		else:
-			print '\t{},'.format(instruction_descriptions[i].instruction_size)
+			print '\t[{}] = {},'.format(hex(instruction_descriptions[i].opcode),
+										instruction_descriptions[i].instruction_size)
 
 	print '};'
+	print ''
+
+def build_opcode_to_mnemonic(data):
+	print 'static char *opcode_to_mnemonic[] = {'
+	lines = data.split('\n')
+	instruction_mnemonics = []
+	for line in lines:
+		if (not is_instruction_supported(line)):
+			continue
+
+		try:
+			opcode = get_opcode(line)
+		except ValueError:
+			continue
+
+		mnemonic = get_instruction_mnemonic_with_format(line)
+		instruction_mnemonics.append((opcode, mnemonic))
+
+	instruction_mnemonics = sorted(instruction_mnemonics, key=lambda t: t[0])
+
+	for i in range(len(instruction_mnemonics)):
+		# last entry should have no comma at the end
+		if i == len(instruction_mnemonics) - 1:
+			print '\t[{}] = "{}"'.format(hex(instruction_mnemonics[i][0]),
+									   instruction_mnemonics[i][1])
+		else:
+			print '\t[{}] = "{}",'.format(hex(instruction_mnemonics[i][0]),
+										instruction_mnemonics[i][1])
+
+	print '};'
+
+def build_tables(data):
+	build_opcode_to_insn_size(data)
+	build_opcode_to_mnemonic(data)
 
 
 def main():
 	with open('65xx Opcode List.txt', 'rb') as f:
-		build_parse_table(f.read())
+		build_tables(f.read())
 
 if __name__ == '__main__':
 	main()

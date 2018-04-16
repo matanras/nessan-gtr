@@ -1,8 +1,8 @@
 #pragma once
 
-/* iNes header magic */
-#define INES_HEADER_MAGIC "NES\x1A"
-#define INES_HEADER_MAGIC_LENGTH 4
+#define INES_HEADER_MAGIC "NES\x1A" /* iNes header magic. */
+#define INES_HEADER_MAGIC_SIZE 4 /* iNes header magic length. */
+#define INES_HEADER_SIZE        16 /* iNes header size. */
 
 /*
 * Magic number which indicates NES2.0 header extension.
