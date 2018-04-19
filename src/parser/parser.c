@@ -262,7 +262,7 @@ static uint8_t opcode_to_instruction_size[] = {
         [0xff] = 3
 };
 
-int get_instruction_description(
+int parser_get_instruction_description(
         unsigned char *buff,
         size_t buffer_size,
         struct instruction_description *desc) {

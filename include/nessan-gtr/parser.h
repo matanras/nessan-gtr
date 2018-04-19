@@ -7,6 +7,9 @@
 
 #include <stdint.h>
 
+/* Maximum size of an instruction in bytes. */
+#define MAX_INSN_SIZE 3
+
 /*
  * Metadata about 2A03 instructions.
  */
@@ -23,7 +26,7 @@ struct instruction_description {
  * @param desc An instruction_description struct to be filled.
  * @return 0 If parsing was successful, -1 otherwise.
  */
-int get_instruction_description(
+int parser_get_instruction_description(
         unsigned char *buff,
         size_t buff_size,
         struct instruction_description *desc);

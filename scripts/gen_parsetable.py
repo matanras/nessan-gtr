@@ -15,11 +15,12 @@ def get_instruction_mnemonic_with_format(line):
 	mnemonic_text = line[6:26].replace(' ', '')
 	# remove *
 	mnemonic_text = mnemonic_text.replace('*', '')
-	# replace all nearlabel/abcd/ab with %d
-	mnemonic_text = mnemonic_text.replace('nearlabel', '%d')
-	mnemonic_text = mnemonic_text.replace('abcd', '%d')
-	mnemonic_text = mnemonic_text.replace('ab', '%d')
-	mnemonic_text = mnemonic_text[:3] + ' ' + mnemonic_text[3:] if '%d' in mnemonic_text else mnemonic_text
+	# replace all nearlabel/abcd/ab with %X
+	mnemonic_text = mnemonic_text.replace('nearlabel', '$%X')
+	mnemonic_text = mnemonic_text.replace('abcd', '%X')
+	mnemonic_text = mnemonic_text.replace('ab', '%X')
+	mnemonic_text = mnemonic_text[:3] + ' ' + mnemonic_text[3:] if '%X' in mnemonic_text else mnemonic_text
+	mnemonic_text += '\\n'
 	return mnemonic_text
 
 def get_instruction_size(line):

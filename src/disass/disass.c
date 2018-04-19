@@ -1,381 +1,390 @@
 #include "disass.h"
 
-static struct disassembler_settings settings;
+/* For example, "ORA ($abcd),Y\n" */
+#define MAX_MNEMONIC_SIZE 15
 
 static char *opcode_to_mnemonic[] = {
-	[0x0] = "BRK #$%d",
-	[0x1] = "ORA ($%d,X)",
-	[0x2] = "HLT",
-	[0x3] = "ASO ($%d,X)",
-	[0x4] = "SKB $%d",
-	[0x5] = "ORA $%d",
-	[0x6] = "ASL $%d",
-	[0x7] = "ASO $%d",
-	[0x8] = "PHP",
-	[0x9] = "ORA #$%d",
-	[0xa] = "ASLA",
-	[0xb] = "ANC #$%d",
-	[0xc] = "SKW $%d",
-	[0xd] = "ORA $%d",
-	[0xe] = "ASL $%d",
-	[0xf] = "ASO $%d",
-	[0x10] = "BPL %d",
-	[0x11] = "ORA ($%d),Y",
-	[0x12] = "HLT",
-	[0x13] = "ASO ($%d),Y",
-	[0x14] = "SKB $%d,X",
-	[0x15] = "ORA $%d,X",
-	[0x16] = "ASL $%d,X",
-	[0x17] = "ASO $%d,X",
-	[0x18] = "CLC",
-	[0x19] = "ORA $%d,Y",
-	[0x1a] = "NOP",
-	[0x1b] = "ASO $%d,Y",
-	[0x1c] = "SKW $%d,X",
-	[0x1d] = "ORA $%d,X",
-	[0x1e] = "ASL $%d,X",
-	[0x1f] = "ASO $%d,X",
-	[0x20] = "JSR $%d",
-	[0x21] = "AND ($%d,X)",
-	[0x22] = "HLT",
-	[0x23] = "RLA ($%d,X)",
-	[0x24] = "BIT $%d",
-	[0x25] = "AND $%d",
-	[0x26] = "ROL $%d",
-	[0x27] = "RLA $%d",
-	[0x28] = "PLP",
-	[0x29] = "AND #$%d",
-	[0x2a] = "ROLA",
-	[0x2b] = "ANC #$%d",
-	[0x2c] = "BIT $%d",
-	[0x2d] = "AND $%d",
-	[0x2e] = "ROL $%d",
-	[0x2f] = "RLA $%d",
-	[0x30] = "BMI %d",
-	[0x31] = "AND ($%d),Y",
-	[0x32] = "HLT",
-	[0x33] = "RLA ($%d),Y",
-	[0x34] = "SKB $%d,X",
-	[0x35] = "AND $%d,X",
-	[0x36] = "ROL $%d,X",
-	[0x37] = "RLA $%d,X",
-	[0x38] = "SEC",
-	[0x39] = "AND $%d,Y",
-	[0x3a] = "NOP",
-	[0x3b] = "RLA $%d,Y",
-	[0x3c] = "SKW $%d,X",
-	[0x3d] = "AND $%d,X",
-	[0x3e] = "ROL $%d,X",
-	[0x3f] = "RLA $%d,X",
-	[0x40] = "RTI",
-	[0x41] = "EOR ($%d,X)",
-	[0x42] = "HLT",
-	[0x43] = "LSE ($%d,X)",
-	[0x44] = "SKB $%d",
-	[0x45] = "EOR $%d",
-	[0x46] = "LSR $%d",
-	[0x47] = "LSE $%d",
-	[0x48] = "PHA",
-	[0x49] = "EOR #$%d",
-	[0x4a] = "LSRA",
-	[0x4b] = "ALR #$%d",
-	[0x4c] = "JMP $%d",
-	[0x4d] = "EOR $%d",
-	[0x4e] = "LSR $%d",
-	[0x4f] = "LSE $%d",
-	[0x50] = "BVC %d",
-	[0x51] = "EOR ($%d),Y",
-	[0x52] = "HLT",
-	[0x53] = "LSE ($%d),Y",
-	[0x54] = "SKB $%d,X",
-	[0x55] = "EOR $%d,X",
-	[0x56] = "LSR $%d,X",
-	[0x57] = "LSE $%d,X",
-	[0x58] = "CLI",
-	[0x59] = "EOR $%d,Y",
-	[0x5a] = "NOP",
-	[0x5b] = "LSE $%d,Y",
-	[0x5c] = "SKW $%d,X",
-	[0x5d] = "EOR $%d,X",
-	[0x5e] = "LSR $%d,X",
-	[0x5f] = "LSE $%d,X",
-	[0x60] = "RTS",
-	[0x61] = "ADC ($%d,X)",
-	[0x62] = "HLT",
-	[0x63] = "RRA ($%d,X)",
-	[0x64] = "SKB $%d",
-	[0x65] = "ADC $%d",
-	[0x66] = "ROR $%d",
-	[0x67] = "RRA $%d",
-	[0x68] = "PLA",
-	[0x69] = "ADC #$%d",
-	[0x6a] = "RORA",
-	[0x6b] = "ARR #$%d",
-	[0x6c] = "JMP ($%d)",
-	[0x6d] = "ADC $%d",
-	[0x6e] = "ROR $%d",
-	[0x6f] = "RRA $%d",
-	[0x70] = "BVS %d",
-	[0x71] = "ADC ($%d),Y",
-	[0x72] = "HLT",
-	[0x73] = "RRA ($%d),Y",
-	[0x74] = "SKB $%d,X",
-	[0x75] = "ADC $%d,X",
-	[0x76] = "ROR $%d,X",
-	[0x77] = "RRA $%d,X",
-	[0x78] = "SEI",
-	[0x79] = "ADC $%d,Y",
-	[0x7a] = "NOP",
-	[0x7b] = "RRA $%d,Y",
-	[0x7c] = "SKW $%d,X",
-	[0x7d] = "ADC $%d,X",
-	[0x7e] = "ROR $%d,X",
-	[0x7f] = "RRA $%d,X",
-	[0x80] = "SKB #$%d",
-	[0x81] = "STA ($%d,X)",
-	[0x82] = "SKB #$%d",
-	[0x83] = "SAX ($%d,X)",
-	[0x84] = "STY $%d",
-	[0x85] = "STA $%d",
-	[0x86] = "STX $%d",
-	[0x87] = "SAX $%d",
-	[0x88] = "DEY",
-	[0x89] = "SKB #$%d",
-	[0x8a] = "TXA",
-	[0x8b] = "ANE #$%d",
-	[0x8c] = "STY $%d",
-	[0x8d] = "STA $%d",
-	[0x8e] = "STX $%d",
-	[0x8f] = "SAX $%d",
-	[0x90] = "BCC %d",
-	[0x91] = "STA ($%d),Y",
-	[0x92] = "HLT",
-	[0x93] = "SHA ($%d),Y",
-	[0x94] = "STY $%d,X",
-	[0x95] = "STA $%d,X",
-	[0x96] = "STX $%d,Y",
-	[0x97] = "SAX $%d,Y",
-	[0x98] = "TYA",
-	[0x99] = "STA $%d,Y",
-	[0x9a] = "TXS",
-	[0x9b] = "SHS $%d,Y",
-	[0x9c] = "SHY $%d,X",
-	[0x9d] = "STA $%d,X",
-	[0x9e] = "SHX $%d,Y",
-	[0x9f] = "SHA $%d,Y",
-	[0xa0] = "LDY #$%d",
-	[0xa1] = "LDA ($%d,X)",
-	[0xa2] = "LDX #$%d",
-	[0xa3] = "LAX ($%d,X)",
-	[0xa4] = "LDY $%d",
-	[0xa5] = "LDA $%d",
-	[0xa6] = "LDX $%d",
-	[0xa7] = "LAX $%d",
-	[0xa8] = "TAY",
-	[0xa9] = "LDA #$%d",
-	[0xaa] = "TAX",
-	[0xab] = "ANX #$%d",
-	[0xac] = "LDY $%d",
-	[0xad] = "LDA $%d",
-	[0xae] = "LDX $%d",
-	[0xaf] = "LAX $%d",
-	[0xb0] = "BCS %d",
-	[0xb1] = "LDA ($%d),Y",
-	[0xb2] = "HLT",
-	[0xb3] = "LAX ($%d),Y",
-	[0xb4] = "LDY $%d,X",
-	[0xb5] = "LDA $%d,X",
-	[0xb6] = "LDX $%d,Y",
-	[0xb7] = "LAX $%d,Y",
-	[0xb8] = "CLV",
-	[0xb9] = "LDA $%d,Y",
-	[0xba] = "TSX",
-	[0xbb] = "LAS $%d,Y",
-	[0xbc] = "LDY $%d,X",
-	[0xbd] = "LDA $%d,X",
-	[0xbe] = "LDX $%d,Y",
-	[0xbf] = "LAX $%d,Y",
-	[0xc0] = "CPY #$%d",
-	[0xc1] = "CMP ($%d,X)",
-	[0xc2] = "SKB #$%d",
-	[0xc3] = "DCM ($%d,X)",
-	[0xc4] = "CPY $%d",
-	[0xc5] = "CMP $%d",
-	[0xc6] = "DEC $%d",
-	[0xc7] = "DCM $%d",
-	[0xc8] = "INY",
-	[0xc9] = "CMP #$%d",
-	[0xca] = "DEX",
-	[0xcb] = "SBX #$%d",
-	[0xcc] = "CPY $%d",
-	[0xcd] = "CMP $%d",
-	[0xce] = "DEC $%d",
-	[0xcf] = "DCM $%d",
-	[0xd0] = "BNE %d",
-	[0xd1] = "CMP ($%d),Y",
-	[0xd2] = "HLT",
-	[0xd3] = "DCM ($%d),Y",
-	[0xd4] = "SKB $%d,X",
-	[0xd5] = "CMP $%d,X",
-	[0xd6] = "DEC $%d,X",
-	[0xd7] = "DCM $%d,X",
-	[0xd8] = "CLD",
-	[0xd9] = "CMP $%d,Y",
-	[0xda] = "NOP",
-	[0xdb] = "DCM $%d,Y",
-	[0xdc] = "SKW $%d,X",
-	[0xdd] = "CMP $%d,X",
-	[0xde] = "DEC $%d,X",
-	[0xdf] = "DCM $%d,X",
-	[0xe0] = "CPX #$%d",
-	[0xe1] = "SBC ($%d,X)",
-	[0xe2] = "SKB #$%d",
-	[0xe3] = "INS ($%d,X)",
-	[0xe4] = "CPX $%d",
-	[0xe5] = "SBC $%d",
-	[0xe6] = "INC $%d",
-	[0xe7] = "INS $%d",
-	[0xe8] = "INX",
-	[0xe9] = "SBC #$%d",
-	[0xea] = "NOP",
-	[0xeb] = "SBC #$%d",
-	[0xec] = "CPX $%d",
-	[0xed] = "SBC $%d",
-	[0xee] = "INC $%d",
-	[0xef] = "INS $%d",
-	[0xf0] = "BEQ %d",
-	[0xf1] = "SBC ($%d),Y",
-	[0xf2] = "HLT",
-	[0xf3] = "INS ($%d),Y",
-	[0xf4] = "SKB $%d,X",
-	[0xf5] = "SBC $%d,X",
-	[0xf6] = "INC $%d,X",
-	[0xf7] = "INS $%d,X",
-	[0xf8] = "SED",
-	[0xf9] = "SBC $%d,Y",
-	[0xfa] = "NOP",
-	[0xfb] = "INS $%d,Y",
-	[0xfc] = "SKW $%d,X",
-	[0xfd] = "SBC $%d,X",
-	[0xfe] = "INC $%d,X",
-	[0xff] = "INS $%d,X"
+	[0x0] = "BRK #$%X\n",
+	[0x1] = "ORA ($%X,X)\n",
+	[0x2] = "HLT\n",
+	[0x3] = "ASO ($%X,X)\n",
+	[0x4] = "SKB $%X\n",
+	[0x5] = "ORA $%X\n",
+	[0x6] = "ASL $%X\n",
+	[0x7] = "ASO $%X\n",
+	[0x8] = "PHP\n",
+	[0x9] = "ORA #$%X\n",
+	[0xa] = "ASLA\n",
+	[0xb] = "ANC #$%X\n",
+	[0xc] = "SKW $%X\n",
+	[0xd] = "ORA $%X\n",
+	[0xe] = "ASL $%X\n",
+	[0xf] = "ASO $%X\n",
+	[0x10] = "BPL $%X\n",
+	[0x11] = "ORA ($%X),Y\n",
+	[0x12] = "HLT\n",
+	[0x13] = "ASO ($%X),Y\n",
+	[0x14] = "SKB $%X,X\n",
+	[0x15] = "ORA $%X,X\n",
+	[0x16] = "ASL $%X,X\n",
+	[0x17] = "ASO $%X,X\n",
+	[0x18] = "CLC\n",
+	[0x19] = "ORA $%X,Y\n",
+	[0x1a] = "NOP\n",
+	[0x1b] = "ASO $%X,Y\n",
+	[0x1c] = "SKW $%X,X\n",
+	[0x1d] = "ORA $%X,X\n",
+	[0x1e] = "ASL $%X,X\n",
+	[0x1f] = "ASO $%X,X\n",
+	[0x20] = "JSR $%X\n",
+	[0x21] = "AND ($%X,X)\n",
+	[0x22] = "HLT\n",
+	[0x23] = "RLA ($%X,X)\n",
+	[0x24] = "BIT $%X\n",
+	[0x25] = "AND $%X\n",
+	[0x26] = "ROL $%X\n",
+	[0x27] = "RLA $%X\n",
+	[0x28] = "PLP\n",
+	[0x29] = "AND #$%X\n",
+	[0x2a] = "ROLA\n",
+	[0x2b] = "ANC #$%X\n",
+	[0x2c] = "BIT $%X\n",
+	[0x2d] = "AND $%X\n",
+	[0x2e] = "ROL $%X\n",
+	[0x2f] = "RLA $%X\n",
+	[0x30] = "BMI $%X\n",
+	[0x31] = "AND ($%X),Y\n",
+	[0x32] = "HLT\n",
+	[0x33] = "RLA ($%X),Y\n",
+	[0x34] = "SKB $%X,X\n",
+	[0x35] = "AND $%X,X\n",
+	[0x36] = "ROL $%X,X\n",
+	[0x37] = "RLA $%X,X\n",
+	[0x38] = "SEC\n",
+	[0x39] = "AND $%X,Y\n",
+	[0x3a] = "NOP\n",
+	[0x3b] = "RLA $%X,Y\n",
+	[0x3c] = "SKW $%X,X\n",
+	[0x3d] = "AND $%X,X\n",
+	[0x3e] = "ROL $%X,X\n",
+	[0x3f] = "RLA $%X,X\n",
+	[0x40] = "RTI\n",
+	[0x41] = "EOR ($%X,X)\n",
+	[0x42] = "HLT\n",
+	[0x43] = "LSE ($%X,X)\n",
+	[0x44] = "SKB $%X\n",
+	[0x45] = "EOR $%X\n",
+	[0x46] = "LSR $%X\n",
+	[0x47] = "LSE $%X\n",
+	[0x48] = "PHA\n",
+	[0x49] = "EOR #$%X\n",
+	[0x4a] = "LSRA\n",
+	[0x4b] = "ALR #$%X\n",
+	[0x4c] = "JMP $%X\n",
+	[0x4d] = "EOR $%X\n",
+	[0x4e] = "LSR $%X\n",
+	[0x4f] = "LSE $%X\n",
+	[0x50] = "BVC $%X\n",
+	[0x51] = "EOR ($%X),Y\n",
+	[0x52] = "HLT\n",
+	[0x53] = "LSE ($%X),Y\n",
+	[0x54] = "SKB $%X,X\n",
+	[0x55] = "EOR $%X,X\n",
+	[0x56] = "LSR $%X,X\n",
+	[0x57] = "LSE $%X,X\n",
+	[0x58] = "CLI\n",
+	[0x59] = "EOR $%X,Y\n",
+	[0x5a] = "NOP\n",
+	[0x5b] = "LSE $%X,Y\n",
+	[0x5c] = "SKW $%X,X\n",
+	[0x5d] = "EOR $%X,X\n",
+	[0x5e] = "LSR $%X,X\n",
+	[0x5f] = "LSE $%X,X\n",
+	[0x60] = "RTS\n",
+	[0x61] = "ADC ($%X,X)\n",
+	[0x62] = "HLT\n",
+	[0x63] = "RRA ($%X,X)\n",
+	[0x64] = "SKB $%X\n",
+	[0x65] = "ADC $%X\n",
+	[0x66] = "ROR $%X\n",
+	[0x67] = "RRA $%X\n",
+	[0x68] = "PLA\n",
+	[0x69] = "ADC #$%X\n",
+	[0x6a] = "RORA\n",
+	[0x6b] = "ARR #$%X\n",
+	[0x6c] = "JMP ($%X)\n",
+	[0x6d] = "ADC $%X\n",
+	[0x6e] = "ROR $%X\n",
+	[0x6f] = "RRA $%X\n",
+	[0x70] = "BVS $%X\n",
+	[0x71] = "ADC ($%X),Y\n",
+	[0x72] = "HLT\n",
+	[0x73] = "RRA ($%X),Y\n",
+	[0x74] = "SKB $%X,X\n",
+	[0x75] = "ADC $%X,X\n",
+	[0x76] = "ROR $%X,X\n",
+	[0x77] = "RRA $%X,X\n",
+	[0x78] = "SEI\n",
+	[0x79] = "ADC $%X,Y\n",
+	[0x7a] = "NOP\n",
+	[0x7b] = "RRA $%X,Y\n",
+	[0x7c] = "SKW $%X,X\n",
+	[0x7d] = "ADC $%X,X\n",
+	[0x7e] = "ROR $%X,X\n",
+	[0x7f] = "RRA $%X,X\n",
+	[0x80] = "SKB #$%X\n",
+	[0x81] = "STA ($%X,X)\n",
+	[0x82] = "SKB #$%X\n",
+	[0x83] = "SAX ($%X,X)\n",
+	[0x84] = "STY $%X\n",
+	[0x85] = "STA $%X\n",
+	[0x86] = "STX $%X\n",
+	[0x87] = "SAX $%X\n",
+	[0x88] = "DEY\n",
+	[0x89] = "SKB #$%X\n",
+	[0x8a] = "TXA\n",
+	[0x8b] = "ANE #$%X\n",
+	[0x8c] = "STY $%X\n",
+	[0x8d] = "STA $%X\n",
+	[0x8e] = "STX $%X\n",
+	[0x8f] = "SAX $%X\n",
+	[0x90] = "BCC $%X\n",
+	[0x91] = "STA ($%X),Y\n",
+	[0x92] = "HLT\n",
+	[0x93] = "SHA ($%X),Y\n",
+	[0x94] = "STY $%X,X\n",
+	[0x95] = "STA $%X,X\n",
+	[0x96] = "STX $%X,Y\n",
+	[0x97] = "SAX $%X,Y\n",
+	[0x98] = "TYA\n",
+	[0x99] = "STA $%X,Y\n",
+	[0x9a] = "TXS\n",
+	[0x9b] = "SHS $%X,Y\n",
+	[0x9c] = "SHY $%X,X\n",
+	[0x9d] = "STA $%X,X\n",
+	[0x9e] = "SHX $%X,Y\n",
+	[0x9f] = "SHA $%X,Y\n",
+	[0xa0] = "LDY #$%X\n",
+	[0xa1] = "LDA ($%X,X)\n",
+	[0xa2] = "LDX #$%X\n",
+	[0xa3] = "LAX ($%X,X)\n",
+	[0xa4] = "LDY $%X\n",
+	[0xa5] = "LDA $%X\n",
+	[0xa6] = "LDX $%X\n",
+	[0xa7] = "LAX $%X\n",
+	[0xa8] = "TAY\n",
+	[0xa9] = "LDA #$%X\n",
+	[0xaa] = "TAX\n",
+	[0xab] = "ANX #$%X\n",
+	[0xac] = "LDY $%X\n",
+	[0xad] = "LDA $%X\n",
+	[0xae] = "LDX $%X\n",
+	[0xaf] = "LAX $%X\n",
+	[0xb0] = "BCS $%X\n",
+	[0xb1] = "LDA ($%X),Y\n",
+	[0xb2] = "HLT\n",
+	[0xb3] = "LAX ($%X),Y\n",
+	[0xb4] = "LDY $%X,X\n",
+	[0xb5] = "LDA $%X,X\n",
+	[0xb6] = "LDX $%X,Y\n",
+	[0xb7] = "LAX $%X,Y\n",
+	[0xb8] = "CLV\n",
+	[0xb9] = "LDA $%X,Y\n",
+	[0xba] = "TSX\n",
+	[0xbb] = "LAS $%X,Y\n",
+	[0xbc] = "LDY $%X,X\n",
+	[0xbd] = "LDA $%X,X\n",
+	[0xbe] = "LDX $%X,Y\n",
+	[0xbf] = "LAX $%X,Y\n",
+	[0xc0] = "CPY #$%X\n",
+	[0xc1] = "CMP ($%X,X)\n",
+	[0xc2] = "SKB #$%X\n",
+	[0xc3] = "DCM ($%X,X)\n",
+	[0xc4] = "CPY $%X\n",
+	[0xc5] = "CMP $%X\n",
+	[0xc6] = "DEC $%X\n",
+	[0xc7] = "DCM $%X\n",
+	[0xc8] = "INY\n",
+	[0xc9] = "CMP #$%X\n",
+	[0xca] = "DEX\n",
+	[0xcb] = "SBX #$%X\n",
+	[0xcc] = "CPY $%X\n",
+	[0xcd] = "CMP $%X\n",
+	[0xce] = "DEC $%X\n",
+	[0xcf] = "DCM $%X\n",
+	[0xd0] = "BNE $%X\n",
+	[0xd1] = "CMP ($%X),Y\n",
+	[0xd2] = "HLT\n",
+	[0xd3] = "DCM ($%X),Y\n",
+	[0xd4] = "SKB $%X,X\n",
+	[0xd5] = "CMP $%X,X\n",
+	[0xd6] = "DEC $%X,X\n",
+	[0xd7] = "DCM $%X,X\n",
+	[0xd8] = "CLD\n",
+	[0xd9] = "CMP $%X,Y\n",
+	[0xda] = "NOP\n",
+	[0xdb] = "DCM $%X,Y\n",
+	[0xdc] = "SKW $%X,X\n",
+	[0xdd] = "CMP $%X,X\n",
+	[0xde] = "DEC $%X,X\n",
+	[0xdf] = "DCM $%X,X\n",
+	[0xe0] = "CPX #$%X\n",
+	[0xe1] = "SBC ($%X,X)\n",
+	[0xe2] = "SKB #$%X\n",
+	[0xe3] = "INS ($%X,X)\n",
+	[0xe4] = "CPX $%X\n",
+	[0xe5] = "SBC $%X\n",
+	[0xe6] = "INC $%X\n",
+	[0xe7] = "INS $%X\n",
+	[0xe8] = "INX\n",
+	[0xe9] = "SBC #$%X\n",
+	[0xea] = "NOP\n",
+	[0xeb] = "SBC #$%X\n",
+	[0xec] = "CPX $%X\n",
+	[0xed] = "SBC $%X\n",
+	[0xee] = "INC $%X\n",
+	[0xef] = "INS $%X\n",
+	[0xf0] = "BEQ $%X\n",
+	[0xf1] = "SBC ($%X),Y\n",
+	[0xf2] = "HLT\n",
+	[0xf3] = "INS ($%X),Y\n",
+	[0xf4] = "SKB $%X,X\n",
+	[0xf5] = "SBC $%X,X\n",
+	[0xf6] = "INC $%X,X\n",
+	[0xf7] = "INS $%X,X\n",
+	[0xf8] = "SED\n",
+	[0xf9] = "SBC $%X,Y\n",
+	[0xfa] = "NOP\n",
+	[0xfb] = "INS $%X,Y\n",
+	[0xfc] = "SKW $%X,X\n",
+	[0xfd] = "SBC $%X,X\n",
+	[0xfe] = "INC $%X,X\n",
+	[0xff] = "INS $%X,X\n"
 };
 
-static int validate_header(const struct ines2_header *hdr) {
-	return memcmp(hdr->magic, INES_HEADER_MAGIC, INES_HEADER_MAGIC_SIZE) &&
+static bool is_header_valid(const struct ines2_header *hdr) {
+	return memcmp(hdr->magic, INES_HEADER_MAGIC, INES_HEADER_MAGIC_SIZE) == 0 &&
 		hdr->prg_size != 0;
 }
 
-int disassembler_init(char *nes_binary_fpath) {
-	int ret;
-	FILE *image_file;
-	struct ines2_header hdr;
+int disass_get_header(FILE *nes_image, struct ines2_header *hdr) {
+	size_t read_bytes;
 
-	image_file = fopen(nes_binary_fpath, "rb");
+	if (fseek(nes_image, 0, SEEK_SET) != 0)
+		return -1;
 
-	if (!image_file)
-		return -EBADF;
+	read_bytes = fread(hdr, 1, INES_HEADER_SIZE, nes_image);
 
-	if (fread(&hdr, 1, sizeof(hdr), image_file) < sizeof(hdr)) {
-		ret = -EINVAL;
-		goto err;
-	}
+	if (read_bytes != INES_HEADER_SIZE)
+		return -1;
 
-	ret = validate_header(&hdr);
-
-	if (ret) {
-		ret = -EINVAL;
-		goto err;
-	}
-
-	memcpy(&settings.hdr, &hdr, sizeof(settings.hdr));
-	memcpy(settings.binary_fpath, nes_binary_fpath, strlen(nes_binary_fpath));
+	if (!is_header_valid(hdr))
+		return -1;
 
 	return 0;
-
-err:
-	fclose(image_file);
-	return ret;
 }
 
-void dump_header(void) {
-	if (settings.hdr.is_nes2 == INES_HEADER_V2_EXTENSION) {
-		puts("iNES header /w NES 2.0 extension:");
-	}
-	else {
-		puts("iNes header:");
-	}
-
-	printf("PRG size: %dKB\n", settings.hdr.prg_size * PRG_ROM_UNIT);
-	if (settings.hdr.chr_size == 0) {
-		printf("CHR ROM: CHR RAM instead of ROM\n");
-	}
-	else {
-		printf("CHR size: %dKB\n", settings.hdr.chr_size * CHR_ROM_UNIT);
-	}
-	printf("Mirroring type: %s\n", settings.hdr.mirroring_type == MIRRORING_HORIZONTAL ? "Horizontal" : "Vertical");
-	printf("Persistent memory on cartridge: %s\n", settings.hdr.is_persistent_memory_present == 1 ? "True" : "False");
-	printf("Trainer present: %s\n", settings.hdr.is_trainer_present ? "True" : "False");
-	printf("Ignore mirror control: %s\n", settings.hdr.ignore_mirror_control ? "True" : "False");
-	printf("VS unisystem: %s\n", settings.hdr.vs_unisystem ? "True" : "False");
-	printf("PlayChoice: %s\n", settings.hdr.playchoice ? "True" : "False");
-	printf("TV system: %s\n", settings.hdr.tv_system == TVSYS_NTSC ? "NTSC" : "PAL");
+static size_t get_prg_offset(const struct ines2_header *hdr) {
+	return hdr->is_trainer_present ? sizeof(*hdr) + TRAINER_SIZE : sizeof(*hdr);
 }
 
-static void print_instruction(const struct instruction_description *desc) {
-	/* Instruction has an operand. */
-	if (desc->instruction_size > 1) {
-		printf("\t");
-		printf(opcode_to_mnemonic[desc->opcode], desc->operand);
-		puts("");
-	}
-	else {
-		printf("\t");
-		puts(opcode_to_mnemonic[desc->opcode]);
-	}
-}
+char *disass_get_code(FILE *nes_image, int num_of_instructions) {
+	/* Max mnemonic size + null termination. */
+	char current_mnemonic[MAX_MNEMONIC_SIZE + 1];
+	char *output, *output_iter, *new_output;
+	unsigned char *image_data, *image_data_iter;
+	size_t prg_offset, output_size, image_data_size, old_iter_offset;
+	size_t read_bytes = 0, current_output_size = 0, current_mnemonic_size = 0;
+	const size_t average_mnemonic_size = 10;
+	struct ines2_header hdr;
+	struct instruction_description current_desc;
+	bool error = false;
+	
+	if (disass_get_header(nes_image, &hdr))
+		return NULL;
 
-void dump_code(void) {
-	int ret;
-	long prg_rom_offset;
-	FILE* binary_file;
-	size_t buff_size, bytes_used = 0;;
-	unsigned char *buff, *iterator;
-	struct instruction_description current;
-
-	buff_size = settings.hdr.prg_size * PRG_ROM_UNIT;
-	buff = malloc(buff_size);
-	iterator = buff;
-
-	binary_file = fopen(settings.binary_fpath, "rb");
-	if (!binary_file) {
-		perror("Couldn't open file!");
-		goto out;
-	}
-
-	if (settings.hdr.is_trainer_present)
-		prg_rom_offset = INES_HEADER_SIZE + TRAINER_SIZE;
+	prg_offset = get_prg_offset(&hdr);
+	image_data_size = num_of_instructions == -1 ? hdr.prg_size * PRG_ROM_UNIT :
+		num_of_instructions * MAX_INSN_SIZE + 1; /* Extra byte to prevent instruction cut-off. */
+	
+	if (num_of_instructions != -1)
+		output_size = average_mnemonic_size * num_of_instructions;
 	else
-		prg_rom_offset = INES_HEADER_SIZE;
+		output_size = average_mnemonic_size * 100;
 
-	fseek(binary_file, prg_rom_offset, SEEK_SET);
-	fread(buff, 1, buff_size, binary_file);
-	ret = get_instruction_description(buff, buff_size, &current);
-	if (ret)
+	output = malloc(output_size);
+
+	if (output == NULL)
+		return NULL;
+
+	image_data = malloc(image_data_size);
+
+	if (image_data == NULL)
+		return NULL;
+
+	output_iter = output;
+	*output_iter = '\0';
+	image_data_iter = image_data;
+
+	if (fseek(nes_image, prg_offset, SEEK_SET)) {
+		error = true;
 		goto out;
-	print_instruction(&current);
-	bytes_used += current.instruction_size;
+	}
 
-	while (bytes_used < buff_size) {
-		iterator += current.instruction_size;
-		ret = get_instruction_description(iterator, buff_size - bytes_used, &current);
-		if (ret)
-			goto out;
-		print_instruction(&current);
-		bytes_used += current.instruction_size;
+	if (fread(image_data, 1, image_data_size, nes_image) != image_data_size) {
+		error = true;
+		goto out;
+	}
+
+	while (read_bytes < image_data_size) {
+		if (parser_get_instruction_description(image_data_iter, image_data_size - read_bytes, &current_desc) != 0) {
+			strcpy(current_mnemonic, "<unknown>\n");
+			/* Iterate by one until we find a valid instruction. */
+			current_desc.instruction_size = 1;
+		}
+		else {
+			if (current_desc.instruction_size > 1) {
+				/* Size of mnemonic + newline. */
+				sprintf(current_mnemonic, opcode_to_mnemonic[current_desc.opcode], current_desc.operand);
+			}
+			else {
+				strcpy(current_mnemonic, opcode_to_mnemonic[current_desc.opcode]);
+			}
+		}
+
+		current_mnemonic_size = strlen(current_mnemonic);
+
+		/* Account for null-termination when checking possible overflow. */
+		if (current_output_size + current_mnemonic_size + 1 > output_size) {
+			/* Double the output buffer size and update the iterator. */
+			output_size *= 2;
+			old_iter_offset = output_iter - output;
+			new_output = realloc(output, output_size);
+			
+			if (new_output == NULL) {
+				error = true;
+				goto out;
+			}
+
+			output = new_output;
+			output_iter = output + old_iter_offset;
+		}
+
+		strcpy(output_iter, current_mnemonic);
+		output_iter += current_mnemonic_size;
+		current_output_size += current_mnemonic_size;
+
+		read_bytes += current_desc.instruction_size;
+		image_data_iter += current_desc.instruction_size;
 	}
 
 out:
+	if (error)
+		free(output);
+	free(image_data);
+	return error ? NULL : output;
+}
+
+void disass_cleanup_code(char* buff) {
 	free(buff);
-	fclose(binary_file);
 }

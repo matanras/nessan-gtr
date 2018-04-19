@@ -53,4 +53,5 @@ struct ines2_header {
 	uint8_t padding4 : 7;
 	uint8_t extra[6];
 };
+
 #pragma pack(pop)
