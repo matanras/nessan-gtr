@@ -354,7 +354,7 @@ char *disass_get_code(FILE *nes_image, int num_of_instructions) {
 		if (parser_get_instruction_description(image_data + read_bytes, image_data_size - read_bytes, &current_desc) != 0) {
 			/* Check if parsing failed because we cut off
 			 * the last instruction when the data was read from the file. */
-			if (read_bytes + parser_get_instruction_size(image_data + read_bytes) > image_data_size) {
+			if (read_bytes + parser_get_instruction_size(*(image_data + read_bytes)) > image_data_size) {
 				/* We make sure that image_data + read_bytes points to 3 bytes of an instruction
 				 * (the max instruction size, worst case scenario).
 				 */

@@ -286,6 +286,6 @@ int parser_get_instruction_description(
     return 0;
 }
 
-size_t parser_get_instruction_size(unsigned char* buff) {
-	return opcode_to_instruction_size[*buff];
+size_t parser_get_instruction_size(uint8_t opcode) {
+	return opcode_to_instruction_size[opcode];
 }
