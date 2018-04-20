@@ -288,25 +288,40 @@ static size_t get_prg_offset(const struct ines2_header *hdr) {
 	return hdr->is_trainer_present ? sizeof(*hdr) + TRAINER_SIZE : sizeof(*hdr);
 }
 
+static void fill_mnemonic(char *mnemonic, const struct instruction_description *desc, bool is_valid) {
+	if (!is_valid) {
+		strcpy(mnemonic, "<unknown>\n");
+	}
+	else {
+		if (desc->instruction_size > 1) {
+			/* Size of mnemonic + newline. */
+			sprintf(mnemonic, opcode_to_mnemonic[desc->opcode], desc->operand);
+		}
+		else {
+			strcpy(mnemonic, opcode_to_mnemonic[desc->opcode]);
+		}
+	}
+}
+
 char *disass_get_code(FILE *nes_image, int num_of_instructions) {
 	/* Max mnemonic size + null termination. */
 	char current_mnemonic[MAX_MNEMONIC_SIZE + 1];
-	char *output, *output_iter, *new_output;
-	unsigned char *image_data, *image_data_iter;
-	size_t prg_offset, output_size, image_data_size, old_iter_offset;
-	size_t read_bytes = 0, current_output_size = 0, current_mnemonic_size = 0;
+	char *output, *new_output;
+	unsigned char *image_data;
+	size_t prg_offset, output_size, image_data_size, current_mnemonic_size;
+	size_t read_bytes = 0, current_output_size = 0;
 	const size_t average_mnemonic_size = 10;
 	struct ines2_header hdr;
 	struct instruction_description current_desc;
 	bool error = false;
-	
+
 	if (disass_get_header(nes_image, &hdr))
 		return NULL;
 
 	prg_offset = get_prg_offset(&hdr);
 	image_data_size = num_of_instructions == -1 ? hdr.prg_size * PRG_ROM_UNIT :
-		num_of_instructions * MAX_INSN_SIZE + 1; /* Extra byte to prevent instruction cut-off. */
-	
+		num_of_instructions * MAX_INSN_SIZE; /* Extra byte to prevent instruction cut-off. */
+
 	if (num_of_instructions != -1)
 		output_size = average_mnemonic_size * num_of_instructions;
 	else
@@ -317,14 +332,13 @@ char *disass_get_code(FILE *nes_image, int num_of_instructions) {
 	if (output == NULL)
 		return NULL;
 
-	image_data = malloc(image_data_size);
+	/* Extra 2 bytes in case the last instruction is cut. */
+	image_data = malloc(image_data_size + 2);
 
 	if (image_data == NULL)
 		return NULL;
 
-	output_iter = output;
-	*output_iter = '\0';
-	image_data_iter = image_data;
+	*output = '\0';
 
 	if (fseek(nes_image, prg_offset, SEEK_SET)) {
 		error = true;
@@ -337,19 +351,31 @@ char *disass_get_code(FILE *nes_image, int num_of_instructions) {
 	}
 
 	while (read_bytes < image_data_size) {
-		if (parser_get_instruction_description(image_data_iter, image_data_size - read_bytes, &current_desc) != 0) {
-			strcpy(current_mnemonic, "<unknown>\n");
-			/* Iterate by one until we find a valid instruction. */
-			current_desc.instruction_size = 1;
-		}
-		else {
-			if (current_desc.instruction_size > 1) {
-				/* Size of mnemonic + newline. */
-				sprintf(current_mnemonic, opcode_to_mnemonic[current_desc.opcode], current_desc.operand);
+		if (parser_get_instruction_description(image_data + read_bytes, image_data_size - read_bytes, &current_desc) != 0) {
+			/* Check if parsing failed because we cut off
+			 * the last instruction when the data was read from the file. */
+			if (read_bytes + parser_get_instruction_size(image_data + read_bytes) > image_data_size) {
+				/* We make sure that image_data + read_bytes points to 3 bytes of an instruction
+				 * (the max instruction size, worst case scenario).
+				 */
+				fread(image_data + read_bytes + 1, 1, 2, nes_image);
+				if (parser_get_instruction_description(image_data + read_bytes, MAX_INSN_SIZE, &current_desc)) {
+					fill_mnemonic(current_mnemonic, &current_desc, false);
+					/* Iterate by one until we find a valid instruction. */
+					current_desc.instruction_size = 1;
+				}
+				else {
+					fill_mnemonic(current_mnemonic, &current_desc, true);
+				}
 			}
 			else {
-				strcpy(current_mnemonic, opcode_to_mnemonic[current_desc.opcode]);
+				fill_mnemonic(current_mnemonic, &current_desc, false);
+				/* Iterate by one until we find a valid instruction. */
+				current_desc.instruction_size = 1;
 			}
+		}
+		else {
+			fill_mnemonic(current_mnemonic, &current_desc, true);
 		}
 
 		current_mnemonic_size = strlen(current_mnemonic);
@@ -358,24 +384,20 @@ char *disass_get_code(FILE *nes_image, int num_of_instructions) {
 		if (current_output_size + current_mnemonic_size + 1 > output_size) {
 			/* Double the output buffer size and update the iterator. */
 			output_size *= 2;
-			old_iter_offset = output_iter - output;
 			new_output = realloc(output, output_size);
-			
+
 			if (new_output == NULL) {
 				error = true;
 				goto out;
 			}
 
 			output = new_output;
-			output_iter = output + old_iter_offset;
 		}
 
-		strcpy(output_iter, current_mnemonic);
-		output_iter += current_mnemonic_size;
+		strcpy(output + current_output_size, current_mnemonic);
 		current_output_size += current_mnemonic_size;
 
 		read_bytes += current_desc.instruction_size;
-		image_data_iter += current_desc.instruction_size;
 	}
 
 out:

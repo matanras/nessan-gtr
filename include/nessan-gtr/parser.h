@@ -30,3 +30,10 @@ int parser_get_instruction_description(
         unsigned char *buff,
         size_t buff_size,
         struct instruction_description *desc);
+
+/**
+ * Get the size of the instruction in the given buffer.
+ * @param buff A buffer which contains the instruction bytes.
+ * @return The size of the instruction the buffer.
+ */
+size_t parser_get_instruction_size(unsigned char *buff);
