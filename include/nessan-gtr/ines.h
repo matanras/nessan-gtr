@@ -29,9 +29,9 @@
 /*
 * iNes header, with NES 2.0 extension.
 */
-#pragma pack(push, 1)
 #include <stdint.h>
 
+#pragma pack(push, 1)
 struct ines2_header {
 	uint8_t magic[4];
 	uint8_t prg_size;
@@ -41,17 +41,16 @@ struct ines2_header {
 	uint8_t is_persistent_memory_present : 1;
 	uint8_t is_trainer_present : 1;
 	uint8_t ignore_mirror_control : 1;
-	uint8_t padding1 : 4;
+	uint8_t mapper_num_low : 4;
 	/* Flags 7 */
 	uint8_t vs_unisystem : 1;
 	uint8_t playchoice : 1;
 	uint8_t is_nes2 : 2;
-	uint8_t padding2 : 4;
+	uint8_t mapper_num_high : 4;
 	uint8_t padding3;
 	/* flags 9 */
 	uint8_t tv_system : 1;
 	uint8_t padding4 : 7;
 	uint8_t extra[6];
 };
-
 #pragma pack(pop)

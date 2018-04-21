@@ -37,6 +37,7 @@ void dump_header(FILE *nes_image) {
 	printf("VS unisystem: %s\n", hdr.vs_unisystem ? "True" : "False");
 	printf("PlayChoice: %s\n", hdr.playchoice ? "True" : "False");
 	printf("TV system: %s\n", hdr.tv_system == TVSYS_NTSC ? "NTSC" : "PAL");
+	printf("Mapper number: %d\n", hdr.mapper_num_high << 4 + hdr.mapper_num_low);
 }
 
 void dump_code(FILE *nes_image, int num_of_instructions) {
