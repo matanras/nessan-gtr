@@ -7,7 +7,7 @@
 #include "cpu/cpu.h"
 #include "cpu/cpudefs.h"
 
-int load_cartridge(FILE *nes_image, const struct ines2_header *hdr) {
+static int load_cartridge(FILE *nes_image, const struct ines2_header *hdr) {
 	size_t cartridge_data_offset = sizeof(*hdr);
 	word_t prg_rom_size = hdr->prg_size * PRG_ROM_UNIT;
 

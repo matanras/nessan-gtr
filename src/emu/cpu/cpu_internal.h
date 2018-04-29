@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <nessan-gtr/system.h>
+#include <nessan-gtr/types.h>
 
 /* CPU memory mapped registers. */
 #define REG_SQ1_VOL           0x4000

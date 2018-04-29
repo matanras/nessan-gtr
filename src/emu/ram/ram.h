@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <nessan-gtr/system.h>
+#include <nessan-gtr/types.h>
 #include <stdio.h>
 
 #define RAM_SIZE 0x10000
