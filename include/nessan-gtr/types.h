@@ -5,4 +5,4 @@
 #pragma once
 #include <stdint.h>
 
-typedef uint16_t word_t
+typedef uint16_t word_t;

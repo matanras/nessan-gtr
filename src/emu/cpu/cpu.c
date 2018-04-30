@@ -5,33 +5,110 @@
 
 static struct cpu cpu;
 
+static void stack_push_word(word_t word) {
+	mem_write(cpu.regs.s, word);
+	cpu.regs.s -= 2;
+}
+
+static void stack_push_byte(uint8_t byte) {
+	mem_write(cpu.regs.s, byte);
+	--cpu.regs.s;
+}
+
 /* Instruction handlers. */
 
-void SET(word_t operand) {
+static void ORA_impl(uint8_t operand) {
+	cpu.regs.a |= operand;
+	cpu.regs.p.bits.negative = operand & 0x80; /* Test highest bit. */
+	cpu.regs.p.bits.zero = !cpu.regs.a;
+}
+
+static void ORA_DPIndX(word_t operand) {
+	uint8_t zero_page_addr = (operand & 0xff + cpu.regs.x) % 0xff;
+	word_t actual_operand_addr = mem_read(zero_page_addr);
+	ORA_impl(mem_read(actual_operand_addr) & 0xff);
+	cpu.regs.pc += 2;
+}
+
+static void ORA_DP(word_t operand) {
+	ORA_impl(mem_read(operand & 0xff));
+	cpu.regs.pc += 2;
+}
+
+static void ORA_Imm(word_t operand) {
+	ORA_impl(operand & 0xff);
+	cpu.regs.pc += 2;
+}
+
+static void ORA_Abs(word_t operand) {
+	ORA_impl(mem_read(operand));
+	cpu.regs.pc += 3;
+}
+
+static void ORA_DPIndY(word_t operand) {
+	word_t actual_operand_addr = mem_read(operand) + cpu.regs.y;
+	ORA_impl(mem_read(actual_operand_addr) & 0xff);
+	cpu.regs.pc += 2;
+}
+
+static void ORA_DPX(word_t operand) {
+	uint8_t actual_operand = mem_read(operand & 0xff + cpu.regs.x);
+	ORA_impl(actual_operand);
+	cpu.regs.pc += 2;
+}
+
+static void ORA_AbsY(word_t operand) {
+	ORA_impl(mem_read((operand + cpu.regs.y) % 0xffff));
+	cpu.regs.pc += 3;
+}
+
+static void ORA_AbsX(word_t operand) {
+	ORA_impl(mem_read((operand + cpu.regs.x) % 0xffff));
+	cpu.regs.pc += 3;
+}
+
+static void BRK(word_t operand) {
+	cpu.regs.p.bits.brk = SR_BRK_ON;
+	cpu.regs.p.bits.irq = SR_IRQ_DISABLED;
+	stack_push_word(cpu.regs.pc);
+	stack_push_byte(cpu.regs.p.value);
+	cpu.regs.pc = mem_read(ADDR_BRK_VEC);
+}
+
+static void SET(word_t operand) {
 	cpu.regs.p.bits.irq = SR_IRQ_DISABLED;
 	++cpu.regs.pc;
 }
 
-void STA_Abs(word_t operand) {
+static void STA_Abs(word_t operand) {
 	mem_write(operand, cpu.regs.a);
 	cpu.regs.pc += 3;
 }
 
-void LDX_Imm(word_t operand) {
+static void LDX_Imm(word_t operand) {
 	cpu.regs.x += operand & 0xff;
 	cpu.regs.pc += 2;
 }
 
-void LDA_Imm(word_t operand) {
+static void LDA_Imm(word_t operand) {
 	cpu.regs.a = operand & 0xff;
 	cpu.regs.pc += 2;
 }
 
-void CLD(word_t operand) {
+static void CLD(word_t operand) {
 	++cpu.regs.pc;
 }
 
 static instruction_logic opcode_to_insn_logic[] = {
+	[0x00] = BRK,
+	[0x01] = ORA_DPIndX,
+	[0x05] = ORA_DP,
+	[0x09] = ORA_Imm,
+	[0x0D] = ORA_Abs,
+	[0x11] = ORA_DPIndY,
+	[0x15] = ORA_DPX,
+	[0x19] = ORA_AbsY,
+	[0x1D] = ORA_AbsX,
 	[0x78] = SET,
 	[0x8D] = STA_Abs,
 	[0xA2] = LDX_Imm,

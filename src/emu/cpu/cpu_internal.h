@@ -31,8 +31,11 @@
 
 /* Other CPU addresses. */
 #define ADDR_RESET_VEC 0xFFFC
+#define ADDR_BRK_VEC   0xFFFE
 
 /* Status register constants. */
+#define SR_BRK_ON       1
+#define SR_BRK_OFF      1
 #define SR_IRQ_ENABLED  0
 #define SR_IRQ_DISABLED 1
 #define SR_CARRY_OFF    0
@@ -67,7 +70,7 @@ struct cpu_registers {
 	uint8_t s; /* Stack pointer. */
 	uint8_t a; /* Accumulator. */
 	uint8_t x; /* Indexer 1. */
-	uint8_t y; /*Indexer 2. */
+	uint8_t y; /* Indexer 2. */
 };
 
 /* The state of the CPU. */
