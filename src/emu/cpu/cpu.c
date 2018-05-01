@@ -1,11 +1,14 @@
 #include <nessan-gtr/parser.h>
+#include <stdint.h>
 #include "cpu.h"
 #include "cpu_internal.h"
 #include "mmu.h"
 
+#define ZERO_PAGE_LIMIT 0x100
+
 static struct cpu cpu;
 
-static void stack_push_word(word_t word) {
+static void stack_push_word(uint16_t word) {
 	mem_write(cpu.regs.s, word);
 	cpu.regs.s -= 2;
 }
@@ -17,57 +20,156 @@ static void stack_push_byte(uint8_t byte) {
 
 /* Instruction handlers. */
 
+/*
+* Operand is at the given address + x register;
+*/
+static inline uint8_t get_address_absx(uint16_t addr) {
+	return addr + cpu.regs.x;
+}
+
+/*
+* Operand is at the given address + y register;
+*/
+static inline uint8_t get_address_absy(uint16_t addr) {
+	return addr + cpu.regs.y;
+}
+
+/*
+* Operand is at the adress pointed to by addr.
+*/
+static inline uint8_t get_address_indirect_absolute(uint16_t addr) {
+	return mem_read(addr);
+}
+
+/*
+* Operand is at the given zero page address + x register;
+* If addr + x overflows ZERO_PAGE_LIMIT, it simply wraps around.
+*/
+static inline uint8_t get_address_dpx(uint8_t addr) {
+	return (addr + cpu.regs.x) % ZERO_PAGE_LIMIT;
+}
+
+/*
+* Operand is at the given zero page  address + y register;
+* If addr + y overflows ZERO_PAGE_LIMIT, it simply wraps around.
+*/
+static inline uint8_t get_address_dpy(uint8_t addr) {
+	return (addr + cpu.regs.y) % ZERO_PAGE_LIMIT;
+}
+
+/*
+* Operand is at the address pointed to by the sum of the given zero page address and the x register.
+* If addr + x overflows ZERO_PAGE_LIMIT, it simply wraps around.
+*/
+static inline uint16_t get_address_dpindx(uint8_t addr) {
+	return mem_read((addr + cpu.regs.x) % ZERO_PAGE_LIMIT);
+}
+
+/*
+* Operand is at the address pointed to by the sum of the address at the zero page address and the y register.
+* If addr + x overflows ZERO_PAGE_LIMIT, it simply wraps around.
+*/
+static inline uint16_t get_address_dpindy(uint8_t addr) {
+	return mem_read(addr) + cpu.regs.y;
+}
+
+static uint8_t ASL_impl(uint8_t operand) {
+	/* Insert highest bit into carry flag. */
+	cpu.regs.p.bits.carry = operand & 0x80;
+	operand <<= 1;
+	/* Check if negative after operation. */
+	cpu.regs.p.bits.negative = operand & 0x80;
+	cpu.regs.p.bits.zero = !operand;
+
+	return operand;
+}
+
+static void ASL_DP(uint16_t operand) {
+	uint8_t ret;
+	ret = ASL_impl(mem_read(operand));
+	mem_write(operand, ret);
+	cpu.regs.pc += 2;
+}
+
+static void ASL_Acc(uint16_t operand) {
+	cpu.regs.a = ASL_impl(cpu.regs.a);
+	++cpu.regs.pc;
+}
+
+static void ASL_Abs(uint16_t operand) {
+	uint8_t ret;
+	ret = ASL_impl(mem_read(operand));
+	mem_write(operand, ret);
+	cpu.regs.pc += 3;
+}
+
+static void ASL_DPX(uint16_t operand) {
+	uint8_t ret;
+
+	uint16_t actual_addr = get_address_absx(operand);
+	ret = ASL_impl(mem_read(actual_addr));
+	mem_write(actual_addr, ret);
+
+	cpu.regs.pc += 2;
+}
+
+static void ASL_AbsX(uint16_t operand) {
+	uint8_t ret;
+
+	uint16_t actual_addr = get_address_absx(operand);
+	ret = ASL_impl(mem_read(actual_addr));
+	mem_write(actual_addr, ret);
+
+	cpu.regs.pc += 3;
+}
+
 static void ORA_impl(uint8_t operand) {
 	cpu.regs.a |= operand;
 	cpu.regs.p.bits.negative = operand & 0x80; /* Test highest bit. */
 	cpu.regs.p.bits.zero = !cpu.regs.a;
 }
 
-static void ORA_DPIndX(word_t operand) {
-	uint8_t zero_page_addr = (operand & 0xff + cpu.regs.x) % 0xff;
-	word_t actual_operand_addr = mem_read(zero_page_addr);
-	ORA_impl(mem_read(actual_operand_addr) & 0xff);
+static void ORA_DPIndX(uint16_t operand) {
+	ORA_impl(mem_read(get_address_dpindx(operand)));
 	cpu.regs.pc += 2;
 }
 
-static void ORA_DP(word_t operand) {
-	ORA_impl(mem_read(operand & 0xff));
+static void ORA_DP(uint16_t operand) {
+	ORA_impl(mem_read(operand));
 	cpu.regs.pc += 2;
 }
 
-static void ORA_Imm(word_t operand) {
-	ORA_impl(operand & 0xff);
+static void ORA_Imm(uint16_t operand) {
+	ORA_impl(operand);
 	cpu.regs.pc += 2;
 }
 
-static void ORA_Abs(word_t operand) {
+static void ORA_Abs(uint16_t operand) {
 	ORA_impl(mem_read(operand));
 	cpu.regs.pc += 3;
 }
 
-static void ORA_DPIndY(word_t operand) {
-	word_t actual_operand_addr = mem_read(operand) + cpu.regs.y;
-	ORA_impl(mem_read(actual_operand_addr) & 0xff);
+static void ORA_DPIndY(uint16_t operand) {
+	ORA_impl(mem_read(get_address_dpindy(operand)));
 	cpu.regs.pc += 2;
 }
 
-static void ORA_DPX(word_t operand) {
-	uint8_t actual_operand = mem_read(operand & 0xff + cpu.regs.x);
-	ORA_impl(actual_operand);
+static void ORA_DPX(uint16_t operand) {
+	ORA_impl(mem_read(get_address_dpx(operand)));
 	cpu.regs.pc += 2;
 }
 
-static void ORA_AbsY(word_t operand) {
-	ORA_impl(mem_read((operand + cpu.regs.y) % 0xffff));
+static void ORA_AbsY(uint16_t operand) {
+	ORA_impl(mem_read(get_address_absy(operand)));
 	cpu.regs.pc += 3;
 }
 
-static void ORA_AbsX(word_t operand) {
-	ORA_impl(mem_read((operand + cpu.regs.x) % 0xffff));
+static void ORA_AbsX(uint16_t operand) {
+	ORA_impl(mem_read(get_address_absx(operand)));
 	cpu.regs.pc += 3;
 }
 
-static void BRK(word_t operand) {
+static void BRK(uint16_t operand) {
 	cpu.regs.p.bits.brk = SR_BRK_ON;
 	cpu.regs.p.bits.irq = SR_IRQ_DISABLED;
 	stack_push_word(cpu.regs.pc);
@@ -75,27 +177,27 @@ static void BRK(word_t operand) {
 	cpu.regs.pc = mem_read(ADDR_BRK_VEC);
 }
 
-static void SET(word_t operand) {
+static void SET(uint16_t operand) {
 	cpu.regs.p.bits.irq = SR_IRQ_DISABLED;
 	++cpu.regs.pc;
 }
 
-static void STA_Abs(word_t operand) {
+static void STA_Abs(uint16_t operand) {
 	mem_write(operand, cpu.regs.a);
 	cpu.regs.pc += 3;
 }
 
-static void LDX_Imm(word_t operand) {
+static void LDX_Imm(uint16_t operand) {
 	cpu.regs.x += operand & 0xff;
 	cpu.regs.pc += 2;
 }
 
-static void LDA_Imm(word_t operand) {
+static void LDA_Imm(uint16_t operand) {
 	cpu.regs.a = operand & 0xff;
 	cpu.regs.pc += 2;
 }
 
-static void CLD(word_t operand) {
+static void CLD(uint16_t operand) {
 	++cpu.regs.pc;
 }
 
@@ -119,19 +221,19 @@ static instruction_logic opcode_to_insn_logic[] = {
 
 int execution_loop(void) {
 	struct instruction_description desc;
-	word_t first_insn_addr;
+	uint16_t first_insn_addr;
 	unsigned char insn_data[MAX_INSN_SIZE];
 
 	/* Jump to address in reset vector and begin executing. */
 	first_insn_addr = mem_read(ADDR_RESET_VEC);
 	cpu.regs.pc = first_insn_addr;
 	insn_data[0] = (uint8_t)mem_read(cpu.regs.pc);
-	*(word_t *)(insn_data + 1) = mem_read(cpu.regs.pc + 1);
+	*(uint16_t *)(insn_data + 1) = mem_read(cpu.regs.pc + 1);
 
 	while (parser_get_instruction_description((unsigned char *)&insn_data, MAX_INSN_SIZE, &desc) == 0) {
 		opcode_to_insn_logic[desc.opcode](desc.operand);
 		insn_data[0] = (uint8_t)mem_read(cpu.regs.pc);
-		*(word_t *)(insn_data + 1) = mem_read(cpu.regs.pc + 1);
+		*(uint16_t *)(insn_data + 1) = mem_read(cpu.regs.pc + 1);
 	}
 
 	return -1;
@@ -139,7 +241,7 @@ int execution_loop(void) {
 
 int cpu_power_on(enum memory_mode mem_mode) {
 	int i;
-	
+
 	mmu_configure(mem_mode);
 
 	cpu.regs.a = 0;
@@ -163,6 +265,10 @@ int cpu_power_on(enum memory_mode mem_mode) {
 }
 
 int cpu_reset(void) {
+	if (!cpu.is_powered_on) {
+		return -1;
+	}
+
 	cpu.regs.s -= 3;
 	cpu.regs.p.bits.irq = SR_IRQ_DISABLED;
 	mem_write(REG_SND_CHN, 0); /* Disable sound channels. */

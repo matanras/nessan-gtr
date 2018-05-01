@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <nessan-gtr/ines.h>
-#include <nessan-gtr/system.h>
 #include "emu.h"
 #include "ram/ram.h"
 #include "cpu/cpu.h"
@@ -9,7 +8,7 @@
 
 static int load_cartridge(FILE *nes_image, const struct ines2_header *hdr) {
 	size_t cartridge_data_offset = sizeof(*hdr);
-	word_t prg_rom_size = hdr->prg_size * PRG_ROM_UNIT;
+	uint16_t prg_rom_size = hdr->prg_size * PRG_ROM_UNIT;
 
 	if (hdr->is_trainer_present)
 		cartridge_data_offset += TRAINER_SIZE;

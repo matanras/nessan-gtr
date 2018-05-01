@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <nessan-gtr/types.h>
+#include <stdint.h>
 #include "cpudefs.h"
 
 /**
@@ -15,13 +15,13 @@ void mmu_configure(enum memory_mode mode);
 /**
 * Read a value from RAM.
 * @param addr The address to read from.
-* @return The word in the given address.
+* @return The byte in the given address.
 */
-word_t mem_read(word_t addr);
+uint8_t mem_read(uint16_t addr);
 
 /**
-* Write a word to the given address in RAM.
+* Write a byte to the given address in RAM.
 * @param addr The address to write into.
 * @param value The value to write.
 */
-void mem_write(word_t addr, word_t value);
+void mem_write(uint16_t addr, uint8_t value);
