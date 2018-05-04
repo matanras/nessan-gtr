@@ -303,6 +303,35 @@ static void fill_mnemonic(char *mnemonic, const struct instruction_description *
 	}
 }
 
+static size_t get_code_start_offset(FILE *nes_image, const struct ines2_header *hdr) {
+	size_t reset_vector_offset;
+	uint16_t first_insn_address;
+	size_t prg_rom_data_offset = hdr->is_trainer_present ? sizeof(*hdr) + TRAINER_SIZE : sizeof(*hdr);
+
+	if (hdr->prg_size == 1) {
+		/* 0xfffc(reset vector) - 0x4000(adjust mirroring) - 0x8000(prg rom base address) */
+		reset_vector_offset = 0x3ffc;
+	}
+	else {
+		/* 0xfffc(reset vector) - 0x8000(prg rom base address) */
+		reset_vector_offset = 0x7ffc;
+	}
+
+	/* PRG rom data starts after the header. */
+	reset_vector_offset += prg_rom_data_offset;
+
+	if (fseek(nes_image, reset_vector_offset, SEEK_SET))
+		return 0;
+
+	if (fread(&first_insn_address, 1, 2, nes_image) != 2)
+		return 0;
+
+	if (hdr->prg_size == 1)
+		return first_insn_address - 0x4000 - 0x8000 + prg_rom_data_offset;
+	else
+		return first_insn_address - 0x8000 + prg_rom_data_offset;
+}
+
 char *disass_get_code(FILE *nes_image, int num_of_instructions) {
 	/* Max mnemonic size + null termination. */
 	char current_mnemonic[MAX_MNEMONIC_SIZE + 1];
@@ -340,7 +369,7 @@ char *disass_get_code(FILE *nes_image, int num_of_instructions) {
 
 	*output = '\0';
 
-	if (fseek(nes_image, prg_offset, SEEK_SET)) {
+	if (fseek(nes_image, get_code_start_offset(nes_image, &hdr), SEEK_SET)) {
 		error = true;
 		goto out;
 	}
@@ -353,11 +382,11 @@ char *disass_get_code(FILE *nes_image, int num_of_instructions) {
 	while (read_bytes < image_data_size) {
 		if (parser_get_instruction_description(image_data + read_bytes, image_data_size - read_bytes, &current_desc) != 0) {
 			/* Check if parsing failed because we cut off
-			 * the last instruction when the data was read from the file. */
+			* the last instruction when the data was read from the file. */
 			if (read_bytes + parser_get_instruction_size(image_data + read_bytes) > image_data_size) {
 				/* We make sure that image_data + read_bytes points to 3 bytes of an instruction
-				 * (the max instruction size, worst case scenario).
-				 */
+				* (the max instruction size, worst case scenario).
+				*/
 				fread(image_data + read_bytes + 1, 1, 2, nes_image);
 				if (parser_get_instruction_description(image_data + read_bytes, MAX_INSN_SIZE, &current_desc)) {
 					fill_mnemonic(current_mnemonic, &current_desc, false);
@@ -407,6 +436,6 @@ out:
 	return error ? NULL : output;
 }
 
-void disass_cleanup_code(char* buff) {
+void disass_cleanup_code(char *buff) {
 	free(buff);
 }
