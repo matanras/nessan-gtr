@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <nessan-gtr/types.h>
 
 /* CPU memory mapped registers. */
 #define REG_SQ1_VOL           0x4000
@@ -14,11 +13,11 @@
 #define REG_SQ2_LO            0x4006
 #define REG_SQ2_HI            0x4007
 #define REG_TRI_LINEAR        0x4008
-#define REG_TRI_LO            0x400A
-#define REG_TRI_HI            0x400B
-#define REG_NOISE_VOL         0x400C
-#define REG_NOISE_LO          0x400E
-#define REG_NOISE_HI          0x400F
+#define REG_TRI_LO            0x400a
+#define REG_TRI_HI            0x400b
+#define REG_NOISE_VOL         0x400c
+#define REG_NOISE_LO          0x400e
+#define REG_NOISE_HI          0x400f
 #define REG_DMC_FREQ          0x4010
 #define REG_DMC_RAW           0x4011
 #define REG_DMC_START         0x4012
@@ -30,8 +29,8 @@
 #define REG_FRAME_COUNTER_CTL 0x4017
 
 /* Other CPU addresses. */
-#define ADDR_RESET_VEC 0xFFFC
-#define ADDR_BRK_VEC   0xFFFE
+#define ADDR_RESET_VEC 0xfffc
+#define ADDR_BRK_VEC   0xfffe
 
 /* Status register constants. */
 #define SR_BRK_ON       1
@@ -45,11 +44,11 @@
 
 /* Memory regions. */
 #define MEMREGION_SYSTEM_BEGIN     0x0
-#define MEMREGION_SYSTEM_END    0x1FFF
+#define MEMREGION_SYSTEM_END    0x1fff
 #define MEMREGION_PPUIO_BEGIN   0x2000
-#define MEMREGION_PPUIO_END     0x3FFF
+#define MEMREGION_PPUIO_END     0x3fff
 #define MEMREGION_PRG_ROM_BEGIN 0x8000
-#define MEMREGION_PRG_ROM_END   0xFFFF
+#define MEMREGION_PRG_ROM_END   0xffff
 
 struct cpu_registers {
 	/* Status register. */
@@ -79,5 +78,51 @@ struct cpu {
 	struct cpu_registers regs;
 };
 
-/* Instruction logic. */
-typedef void(*instruction_logic)(word_t operand);
+enum addressing_mode {
+	/* The operand is implied in the opcode. */
+	IMPLIED,
+	/* The byte following the opcode is the operand. */
+	IMMEDIATE,
+	/* The operand is in the given address. */
+	ABSOLUTE,
+	/* The operand is at the given address + X register */
+	ABSOLUTE_X,
+	/* The operand is at the given address + Y register */
+	ABSOLUTE_Y,
+	/* The operand is at the adress pointed to by the given address. */
+	INDIRECT_ABSOLUTE,
+	/* The operand is in the zero-page given address. */
+	DP,
+	/* Operand is at the given zero page address + X register;
+	  If addr + X overflows ZERO_PAGE_LIMIT, it simply wraps around. */
+	DP_X,
+	/* Same as DP_X only with y register instead. */
+	DP_Y,
+	/* Operand is at the address pointed to by the sum of the given zero page address and the X register.
+	   If addr + X overflows ZERO_PAGE_LIMIT, it simply wraps around. */
+	DP_INDIRECT_X,
+	/* Operand is at the address pointed to by the sum of the address at the zero page address and the y register.
+	* If addr + x overflows ZERO_PAGE_LIMIT, it simply wraps around. */
+	DP_INDIRECT_Y,
+};
+
+enum destination {
+	/* The instruction doesn't write result*/
+	NONE,
+	/* The instruction writes result to register. */
+	CPU_REGISTER,
+	/* The instruction writes result to memory. */
+	MEMORY,
+};
+
+/* Instruction implementation logic. */
+typedef uint8_t(*instruction_impl)(uint8_t operand);
+
+typedef uint16_t(*address_translator)(uint16_t operand);
+
+struct instruction_handler_data {
+	uint8_t instruction_size;
+	enum destination instruction_destination;
+	enum addressing_mode addressing_mode;
+	instruction_impl instruction_impl;
+};

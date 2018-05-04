@@ -7,7 +7,7 @@
 
 #include <stdbool.h>
 
-struct ram_state {
+struct ram {
 	bool is_initialized;
-	unsigned char *mem_pool;
+	uint8_t *mem_pool;
 };

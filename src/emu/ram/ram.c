@@ -3,49 +3,49 @@
 #include "ram.h"
 #include "ram_internal.h"
 
-static struct ram_state state;
+static struct ram ram;
 
 int ram_power_on(void) {
-	if (state.is_initialized)
+	if (ram.is_initialized)
 		return 0;
 	
-	state.mem_pool = malloc(RAM_SIZE);
+	ram.mem_pool = malloc(RAM_SIZE);
 	
-	if (!state.mem_pool)
+	if (!ram.mem_pool)
 		return -1;
 
-	state.is_initialized = true;
+	ram.is_initialized = true;
 	return 0;
 }
 
 void ram_shutdown() {
-	state.is_initialized = false;
-	free(state.mem_pool);
-	state.mem_pool = NULL;
+	ram.is_initialized = false;
+	free(ram.mem_pool);
+	ram.mem_pool = NULL;
 }
 
-word_t ram_read(word_t addr) {
-	if (!state.is_initialized)
+uint8_t ram_read(uint16_t addr) {
+	if (!ram.is_initialized)
 		return 0;
 
-	return *(word_t *)(state.mem_pool + addr);
+	return *(ram.mem_pool + addr);
 }
 
-void ram_write(word_t addr, word_t value) {
-	if (!state.is_initialized)
+void ram_write(uint16_t addr, uint8_t value) {
+	if (!ram.is_initialized)
 		return;
 
-	*(word_t *)(state.mem_pool + addr) = value;
+	*(ram.mem_pool + addr) = value;
 }
 
-int ram_file_to_ram(FILE *f, size_t f_offset, word_t ram_offset, word_t size) {
-	if (!state.is_initialized)
+int ram_file_to_ram(FILE *f, size_t f_offset, uint16_t ram_offset, uint16_t size) {
+	if (!ram.is_initialized)
 		return -1;
 	
 	if (fseek(f, f_offset, SEEK_SET))
 		return -1;
 
-	if (fread(state.mem_pool + ram_offset, 1, size, f) != size)
+	if (fread(ram.mem_pool + ram_offset, 1, size, f) != size)
 		return -1;
 
 	return 0;

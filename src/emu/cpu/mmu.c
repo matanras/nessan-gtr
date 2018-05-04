@@ -4,25 +4,25 @@
 #include "../ram/ram.h"
 
 /*
- * The memory mode. Affects memory translations.
- */
+* The memory mode. Affects memory translations.
+*/
 static enum memory_mode memory_mode;
 
 /**
- * Check whether the given address is between min and max (inclusive).
- * @param addr The address to check.
- * @param min The minimum address of the range.
- * @param max The maximum address of the range.
- * @returns True whether addr is or above min and is or below max.
- */
-static inline bool is_in_range(word_t addr, word_t min, word_t max) {
+* Check whether the given address is between min and max (inclusive).
+* @param addr The address to check.
+* @param min The minimum address of the range.
+* @param max The maximum address of the range.
+* @returns True whether addr is or above min and is or below max.
+*/
+static inline bool is_in_range(uint16_t addr, uint16_t min, uint16_t max) {
 	return addr >= min && addr <= max;
 }
 
 /**
- * Translate the address according to the memory mode.
- */
-static word_t translate_address(word_t addr) {
+* Translate the address according to the memory mode.
+*/
+static uint16_t translate_address(uint16_t addr) {
 
 	if (is_in_range(addr, MEMREGION_SYSTEM_BEGIN, MEMREGION_SYSTEM_END)) {
 		addr %= 2048;
@@ -48,10 +48,10 @@ void mmu_configure(const enum memory_mode mode) {
 * @param addr The address to read from.
 * @return The word in the given address.
 */
-word_t mem_read(word_t addr) {
+uint8_t mem_read(uint16_t addr) {
 	return ram_read(translate_address(addr));
 }
 
-void mem_write(word_t addr, word_t value) {
+void mem_write(uint16_t addr, uint8_t value) {
 	ram_write(translate_address(addr), value);
 }
