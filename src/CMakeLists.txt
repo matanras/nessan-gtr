@@ -15,5 +15,6 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 add_subdirectory(parser)
 add_subdirectory(disass)
+add_subdirectory(emu)
 
 add_dependencies(disass parser)
