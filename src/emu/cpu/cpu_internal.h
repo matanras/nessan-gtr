@@ -41,6 +41,10 @@
 #define SR_CARRY_ON     1
 #define SR_NEGATIVE_OFF 0
 #define SR_NEGATIVE_ON  1
+#define SR_ZERO_OFF     0
+#define SR_ZERO_ON      1
+#define SR_OVERFLOW_OFF 0
+#define SR_OVERFLOW_ON  1
 
 /* Memory regions. */
 #define MEMREGION_SYSTEM_BEGIN     0x0
@@ -83,6 +87,8 @@ enum addressing_mode {
 	IMPLIED,
 	/* The byte following the opcode is the operand. */
 	IMMEDIATE,
+	/* The result is written to the accumulator. */
+	ACCUMULATOR,
 	/* The operand is in the given address. */
 	ABSOLUTE,
 	/* The operand is at the given address + X register */
@@ -107,8 +113,6 @@ enum addressing_mode {
 };
 
 enum destination {
-	/* The instruction doesn't write result*/
-	NONE,
 	/* The instruction writes result to register. */
 	CPU_REGISTER,
 	/* The instruction writes result to memory. */
@@ -118,6 +122,9 @@ enum destination {
 /* Instruction implementation logic. */
 typedef uint8_t(*instruction_impl)(uint8_t operand);
 
+/* Instruction implementation logic for instructions with 16-bit wide operands. */
+typedef void(*instruction_impl_ext)(uint16_t operand);
+
 typedef uint16_t(*address_translator)(uint16_t operand);
 
 struct instruction_handler_data {
@@ -125,4 +132,11 @@ struct instruction_handler_data {
 	enum destination instruction_destination;
 	enum addressing_mode addressing_mode;
 	instruction_impl instruction_impl;
+};
+
+struct instruction_handler_data_ext {
+	uint8_t instruction_size;
+	enum destination instruction_destination;
+	enum addressing_mode addressing_mode;
+	instruction_impl_ext instruction_impl;
 };
