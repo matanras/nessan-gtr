@@ -79,6 +79,7 @@ struct cpu_registers {
 /* The state of the CPU. */
 struct cpu {
 	bool is_powered_on;
+	long long executed_instructions;
 	struct cpu_registers regs;
 };
 
@@ -115,6 +116,8 @@ enum addressing_mode {
 enum destination {
 	/* The instruction writes result to register. */
 	CPU_REGISTER,
+	/* The instruction affects PC register. */
+	CPU_REGISTER_PC,
 	/* The instruction writes result to memory. */
 	MEMORY,
 };
@@ -128,14 +131,12 @@ typedef void(*instruction_impl_ext)(uint16_t operand);
 typedef uint16_t(*address_translator)(uint16_t operand);
 
 struct instruction_handler_data {
-	uint8_t instruction_size;
 	enum destination instruction_destination;
 	enum addressing_mode addressing_mode;
 	instruction_impl instruction_impl;
 };
 
 struct instruction_handler_data_ext {
-	uint8_t instruction_size;
 	enum destination instruction_destination;
 	enum addressing_mode addressing_mode;
 	instruction_impl_ext instruction_impl;
