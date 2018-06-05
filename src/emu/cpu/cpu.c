@@ -4,6 +4,7 @@
 #include "cpu.h"
 #include "cpu_internal.h"
 #include "mmu.h"
+#include <stdio.h>
 
 #define ZERO_PAGE_LIMIT 0x100
 
@@ -16,7 +17,7 @@
 static inline int testbit(uint8_t n, uint8_t index) {
 	assert(index >= 0 && index <= 7);
 
-	return n & (1 << index);
+	return (n & (1 << index)) >> index;
 }
 
 static struct cpu cpu;
@@ -213,7 +214,7 @@ static uint8_t CLV(uint8_t operand) {
 
 static uint8_t BCC(uint8_t operand) {
 	if (!cpu.regs.p.bits.carry)
-		cpu.regs.pc += (int16_t)operand;
+		cpu.regs.pc += (int8_t)operand;
 	else
 		cpu.regs.pc += 2;
 
@@ -222,7 +223,7 @@ static uint8_t BCC(uint8_t operand) {
 
 static uint8_t BCS(uint8_t operand) {
 	if (cpu.regs.p.bits.carry)
-		cpu.regs.pc += (int16_t)operand;
+		cpu.regs.pc += (int8_t)operand;
 	else
 		cpu.regs.pc += 2;
 
@@ -231,7 +232,7 @@ static uint8_t BCS(uint8_t operand) {
 
 static uint8_t BEQ(uint8_t operand) {
 	if (cpu.regs.p.bits.zero)
-		cpu.regs.pc += (int16_t)operand;
+		cpu.regs.pc += (int8_t)operand;
 	else
 		cpu.regs.pc += 2;
 
@@ -240,7 +241,7 @@ static uint8_t BEQ(uint8_t operand) {
 
 static uint8_t BNE(uint8_t operand) {
 	if (!cpu.regs.p.bits.zero)
-		cpu.regs.pc += (int16_t)operand;
+		cpu.regs.pc += (int8_t)operand;
 	else
 		cpu.regs.pc += 2;
 
@@ -249,7 +250,7 @@ static uint8_t BNE(uint8_t operand) {
 
 static uint8_t BMI(uint8_t operand) {
 	if (cpu.regs.p.bits.negative)
-		cpu.regs.pc += (int16_t)operand;
+		cpu.regs.pc += (int8_t)operand;
 	else
 		cpu.regs.pc += 2;
 
@@ -258,7 +259,7 @@ static uint8_t BMI(uint8_t operand) {
 
 static uint8_t BPL(uint8_t operand) {
 	if (!cpu.regs.p.bits.negative)
-		cpu.regs.pc += (int16_t)operand;
+		cpu.regs.pc += (int8_t)operand;
 	else
 		cpu.regs.pc += 2;
 
@@ -267,7 +268,7 @@ static uint8_t BPL(uint8_t operand) {
 
 static uint8_t BVC(uint8_t operand) {
 	if (!cpu.regs.p.bits.overflow)
-		cpu.regs.pc += (int16_t)operand;
+		cpu.regs.pc += (int8_t)operand;
 	else
 		cpu.regs.pc += 2;
 
@@ -276,7 +277,7 @@ static uint8_t BVC(uint8_t operand) {
 
 static uint8_t BVS(uint8_t operand) {
 	if (cpu.regs.p.bits.overflow)
-		cpu.regs.pc += (int16_t)operand;
+		cpu.regs.pc += (int8_t)operand;
 	else
 		cpu.regs.pc += 2;
 
@@ -368,7 +369,7 @@ static void JMP(uint16_t operand) {
 }
 
 static void JSR(uint16_t operand) {
-	stack_push_word(cpu.regs.pc - 1);
+	stack_push_word(cpu.regs.pc + 3);
 	cpu.regs.pc = operand;
 }
 
@@ -460,7 +461,7 @@ static uint8_t RTI(uint8_t operand) {
 }
 
 static uint8_t RTS(uint8_t operand) {
-	cpu.regs.pc = stack_pop_word() + 1;
+	cpu.regs.pc = stack_pop_word();
 
 	return 0;
 }
@@ -761,7 +762,7 @@ static struct instruction_handler_data opcode_to_handler_data[] = {
 		.addressing_mode = DP,
 		.instruction_destination = MEMORY,
 	},
-	[0x46] = {
+	[0x48] = {
 		.instruction_impl = PHA,
 		.addressing_mode = IMPLIED,
 		.instruction_destination = CPU_REGISTER,
@@ -990,6 +991,11 @@ static struct instruction_handler_data opcode_to_handler_data[] = {
 		.instruction_impl = STA,
 		.addressing_mode = ABSOLUTE_Y,
 		.instruction_destination = MEMORY,
+	},
+	[0x9a] = {
+		.instruction_impl = TXS,
+		.addressing_mode = IMPLIED,
+		.instruction_destination = CPU_REGISTER,
 	},
 	[0x9d] = {
 		.instruction_impl = STA,
@@ -1307,7 +1313,7 @@ static address_translator address_translators[] = {
 
 static void ext_instruction_handler(const struct instruction_handler_data_ext *data, uint16_t operand) {
 	uint16_t operand_addr = address_translators[data->addressing_mode](operand);
-	data->instruction_impl(mem_read(operand_addr));
+	data->instruction_impl(operand_addr);
 }
 
 static uint8_t get_insn_size(const struct instruction_handler_data *data) {
@@ -1316,6 +1322,7 @@ static uint8_t get_insn_size(const struct instruction_handler_data *data) {
 
 	switch (data->addressing_mode) {
 		case IMPLIED:
+		case ACCUMULATOR:
 			return 1;
 
 		case DP:
@@ -1373,6 +1380,7 @@ void execution_loop(void) {
 	struct instruction_description desc;
 	uint16_t first_insn_addr;
 	unsigned char insn_data[MAX_INSN_SIZE];
+	unsigned char next[MAX_INSN_SIZE];
 
 	/* Jump to address in reset vector and begin executing. */
 	first_insn_addr = mem_read(ADDR_RESET_VEC);
@@ -1388,6 +1396,8 @@ void execution_loop(void) {
 			instruction_handler(&opcode_to_handler_data[desc.opcode], desc.operand);
 		
 		++cpu.executed_instructions;
+		
+		fetch_instruction(next, cpu.regs.pc);
 		fetch_instruction(insn_data, cpu.regs.pc);
 	}
 }
