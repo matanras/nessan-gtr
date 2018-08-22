@@ -1,10 +1,10 @@
-#include <nessan-gtr/parser.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
 #include "cpu.h"
 #include "cpu_internal.h"
 #include "mmu.h"
-#include <stdio.h>
+#include "parser.h"
 
 #define ZERO_PAGE_LIMIT 0x100
 
@@ -14,7 +14,8 @@
 * @param index the index of the bit to test.
 * @return the value of the bit at the specified index.
 */
-static inline int testbit(uint8_t n, uint8_t index) {
+static inline int testbit(uint8_t n, uint8_t index)
+{
 	assert(index >= 0 && index <= 7);
 
 	return (n & (1 << index)) >> index;
@@ -22,23 +23,27 @@ static inline int testbit(uint8_t n, uint8_t index) {
 
 static struct cpu cpu;
 
-static void stack_push_byte(uint8_t byte) {
-	mem_write(cpu.regs.s, byte);
+static void stack_push_byte(uint8_t byte)
+{
 	--cpu.regs.s;
+	mem_write(cpu.regs.s, byte);
 }
 
-static void stack_push_word(uint16_t word) {
-	mem_write(cpu.regs.s, word & 0xff);
-	mem_write(cpu.regs.s + 1, word & 0xff00);
+static void stack_push_word(uint16_t word)
+{
 	cpu.regs.s -= 2;
+	mem_write(cpu.regs.s, word & 0xff);
+	mem_write(cpu.regs.s + 1, word >> 8);
 }
 
 
-uint8_t stack_pop_byte(void) {
+uint8_t stack_pop_byte(void)
+{
 	return mem_read(cpu.regs.s++);
 }
 
-uint16_t stack_pop_word(void) {
+uint16_t stack_pop_word(void)
+{
 	uint16_t result = mem_read(cpu.regs.s + 1) << 8 | mem_read(cpu.regs.s);
 	cpu.regs.s += 2;
 	return result;
@@ -46,28 +51,32 @@ uint16_t stack_pop_word(void) {
 
 /* Instruction handlers. */
 
-static inline uint16_t get_address_abs_and_dp(uint16_t addr) {
+static inline uint16_t get_address_abs_and_dp(uint16_t addr)
+{
 	return addr;
 }
 
 /*
 * Operand is at the given address + x register;
 */
-static inline uint16_t get_address_absx(uint16_t addr) {
+static inline uint16_t get_address_absx(uint16_t addr)
+{
 	return addr + cpu.regs.x;
 }
 
 /*
 * Operand is at the given address + y register;
 */
-static inline uint16_t get_address_absy(uint16_t addr) {
+static inline uint16_t get_address_absy(uint16_t addr)
+{
 	return addr + cpu.regs.y;
 }
 
 /*
 * Operand is at the adress pointed to by addr.
 */
-static inline uint16_t get_address_indirect_absolute(uint16_t addr) {
+static inline uint16_t get_address_indirect_absolute(uint16_t addr)
+{
 	/*
 	* The early revisions of 6502 had a bug where if the word operand crosses a page boundry
 	* (for example 0x1ff and 0x200), the MSB is read from the first byte of the same page, instead of the next.
@@ -82,7 +91,8 @@ static inline uint16_t get_address_indirect_absolute(uint16_t addr) {
 * Operand is at the given zero page address + x register;
 * If addr + x overflows ZERO_PAGE_LIMIT, it simply wraps around.
 */
-static inline uint16_t get_address_dpx(uint16_t addr) {
+static inline uint16_t get_address_dpx(uint16_t addr)
+{
 	return (addr + cpu.regs.x) % ZERO_PAGE_LIMIT;
 }
 
@@ -90,7 +100,8 @@ static inline uint16_t get_address_dpx(uint16_t addr) {
 * Operand is at the given zero page  address + y register;
 * If addr + y overflows ZERO_PAGE_LIMIT, it simply wraps around.
 */
-static inline uint16_t get_address_dpy(uint16_t addr) {
+static inline uint16_t get_address_dpy(uint16_t addr)
+{
 	return (addr + cpu.regs.y) % ZERO_PAGE_LIMIT;
 }
 
@@ -98,7 +109,8 @@ static inline uint16_t get_address_dpy(uint16_t addr) {
 * Operand is at the address pointed to by the sum of the given zero page address and the x register.
 * If addr + x overflows ZERO_PAGE_LIMIT, it simply wraps around.
 */
-static inline uint16_t get_address_dpindx(uint16_t addr) {
+static inline uint16_t get_address_dpindx(uint16_t addr)
+{
 	return mem_read((addr + cpu.regs.x) % ZERO_PAGE_LIMIT);
 }
 
@@ -106,11 +118,13 @@ static inline uint16_t get_address_dpindx(uint16_t addr) {
 * Operand is at the address pointed to by the sum of the address at the zero page address and the y register.
 * If addr + x overflows ZERO_PAGE_LIMIT, it simply wraps around.
 */
-static inline uint16_t get_address_dpindy(uint16_t addr) {
+static inline uint16_t get_address_dpindy(uint16_t addr)
+{
 	return mem_read(addr) + cpu.regs.y;
 }
 
-static uint8_t ASL(uint8_t operand) {
+static uint8_t ASL(uint8_t operand)
+{
 	/* Insert highest bit into carry flag. */
 	cpu.regs.p.bits.carry = testbit(operand, 7);
 	operand <<= 1;
@@ -121,7 +135,8 @@ static uint8_t ASL(uint8_t operand) {
 	return operand;
 }
 
-static uint8_t ORA(uint8_t operand) {
+static uint8_t ORA(uint8_t operand)
+{
 	cpu.regs.a |= operand;
 	cpu.regs.p.bits.negative = testbit(operand, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.a;
@@ -129,7 +144,8 @@ static uint8_t ORA(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t ADC(uint8_t operand) {
+static uint8_t ADC(uint8_t operand)
+{
 	uint8_t result;
 	result = operand + cpu.regs.a + cpu.regs.p.bits.carry;
 	cpu.regs.p.bits.negative = testbit(operand, 7);
@@ -150,7 +166,8 @@ static uint8_t ADC(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t AND(uint8_t operand) {
+static uint8_t AND(uint8_t operand)
+{
 	cpu.regs.a &= operand;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.a, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.a;
@@ -158,7 +175,8 @@ static uint8_t AND(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t BRK(uint8_t operand) {
+static uint8_t BRK(uint8_t operand)
+{
 	cpu.regs.p.bits.brk = SR_BRK_ON;
 	cpu.regs.p.bits.irq = SR_IRQ_DISABLED;
 	stack_push_word(cpu.regs.pc);
@@ -168,13 +186,15 @@ static uint8_t BRK(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t LDA(uint8_t operand) {
+static uint8_t LDA(uint8_t operand)
+{
 	cpu.regs.a = operand;
 
 	return 0;
 }
 
-static uint8_t LDX(uint8_t operand) {
+static uint8_t LDX(uint8_t operand)
+{
 	cpu.regs.x = operand;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.x, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.x;
@@ -182,7 +202,8 @@ static uint8_t LDX(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t LDY(uint8_t operand) {
+static uint8_t LDY(uint8_t operand)
+{
 	cpu.regs.y = operand;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.y, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.y;
@@ -190,29 +211,34 @@ static uint8_t LDY(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t CLC(uint8_t operand) {
+static uint8_t CLC(uint8_t operand)
+{
 	cpu.regs.p.bits.carry = SR_CARRY_OFF;
 
 	return 0;
 }
 
-static uint8_t CLD(uint8_t operand) {
+static uint8_t CLD(uint8_t operand)
+{
 	return 0;
 }
 
-static uint8_t CLI(uint8_t operand) {
+static uint8_t CLI(uint8_t operand)
+{
 	cpu.regs.p.bits.irq = SR_IRQ_ENABLED;
 
 	return 0;
 }
 
-static uint8_t CLV(uint8_t operand) {
+static uint8_t CLV(uint8_t operand)
+{
 	cpu.regs.p.bits.overflow = SR_OVERFLOW_OFF;
 
 	return 0;
 }
 
-static uint8_t BCC(uint8_t operand) {
+static uint8_t BCC(uint8_t operand)
+{
 	if (!cpu.regs.p.bits.carry)
 		cpu.regs.pc += (int8_t)operand;
 	else
@@ -221,7 +247,8 @@ static uint8_t BCC(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t BCS(uint8_t operand) {
+static uint8_t BCS(uint8_t operand)
+{
 	if (cpu.regs.p.bits.carry)
 		cpu.regs.pc += (int8_t)operand;
 	else
@@ -230,7 +257,8 @@ static uint8_t BCS(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t BEQ(uint8_t operand) {
+static uint8_t BEQ(uint8_t operand)
+{
 	if (cpu.regs.p.bits.zero)
 		cpu.regs.pc += (int8_t)operand;
 	else
@@ -239,16 +267,18 @@ static uint8_t BEQ(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t BNE(uint8_t operand) {
+static uint8_t BNE(uint8_t operand)
+{
 	if (!cpu.regs.p.bits.zero)
-		cpu.regs.pc += (int8_t)operand;
+		cpu.regs.pc += (int8_t)(operand + 2);
 	else
 		cpu.regs.pc += 2;
 
 	return 0;
 }
 
-static uint8_t BMI(uint8_t operand) {
+static uint8_t BMI(uint8_t operand)
+{
 	if (cpu.regs.p.bits.negative)
 		cpu.regs.pc += (int8_t)operand;
 	else
@@ -257,7 +287,8 @@ static uint8_t BMI(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t BPL(uint8_t operand) {
+static uint8_t BPL(uint8_t operand)
+{
 	if (!cpu.regs.p.bits.negative)
 		cpu.regs.pc += (int8_t)operand;
 	else
@@ -266,7 +297,8 @@ static uint8_t BPL(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t BVC(uint8_t operand) {
+static uint8_t BVC(uint8_t operand)
+{
 	if (!cpu.regs.p.bits.overflow)
 		cpu.regs.pc += (int8_t)operand;
 	else
@@ -275,7 +307,8 @@ static uint8_t BVC(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t BVS(uint8_t operand) {
+static uint8_t BVS(uint8_t operand)
+{
 	if (cpu.regs.p.bits.overflow)
 		cpu.regs.pc += (int8_t)operand;
 	else
@@ -284,7 +317,8 @@ static uint8_t BVS(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t CMP(uint8_t operand) {
+static uint8_t CMP(uint8_t operand)
+{
 	cpu.regs.p.bits.negative = testbit(cpu.regs.a - operand, 7);
 	cpu.regs.p.bits.zero = cpu.regs.a == operand;
 	cpu.regs.p.bits.carry = cpu.regs.a >= operand;
@@ -292,7 +326,8 @@ static uint8_t CMP(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t CPX(uint8_t operand) {
+static uint8_t CPX(uint8_t operand)
+{
 	cpu.regs.p.bits.negative = testbit(cpu.regs.x - operand, 7);
 	cpu.regs.p.bits.zero = cpu.regs.x == operand;
 	cpu.regs.p.bits.carry = cpu.regs.x >= operand;
@@ -300,7 +335,8 @@ static uint8_t CPX(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t CPY(uint8_t operand) {
+static uint8_t CPY(uint8_t operand)
+{
 	cpu.regs.p.bits.negative = testbit(cpu.regs.y - operand, 7);
 	cpu.regs.p.bits.zero = cpu.regs.y == operand;
 	cpu.regs.p.bits.carry = cpu.regs.y >= operand;
@@ -308,7 +344,8 @@ static uint8_t CPY(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t DEC(uint8_t operand) {
+static uint8_t DEC(uint8_t operand)
+{
 	uint8_t result = operand - 1;
 	cpu.regs.p.bits.negative = testbit(result, 7);
 	cpu.regs.p.bits.zero = !result;
@@ -316,7 +353,8 @@ static uint8_t DEC(uint8_t operand) {
 	return result;
 }
 
-static uint8_t DEY(uint8_t operand) {
+static uint8_t DEY(uint8_t operand)
+{
 	--cpu.regs.y;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.y, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.y;
@@ -324,7 +362,8 @@ static uint8_t DEY(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t DEX(uint8_t operand) {
+static uint8_t DEX(uint8_t operand)
+{
 	--cpu.regs.x;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.x, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.x;
@@ -332,7 +371,8 @@ static uint8_t DEX(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t EOR(uint8_t operand) {
+static uint8_t EOR(uint8_t operand)
+{
 	cpu.regs.a ^= operand;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.a, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.a;
@@ -340,7 +380,8 @@ static uint8_t EOR(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t INC(uint8_t operand) {
+static uint8_t INC(uint8_t operand)
+{
 	uint8_t result = operand + 1;
 	cpu.regs.p.bits.negative = testbit(result, 7);
 	cpu.regs.p.bits.zero = !result;
@@ -348,7 +389,8 @@ static uint8_t INC(uint8_t operand) {
 	return result;
 }
 
-static uint8_t INX(uint8_t operand) {
+static uint8_t INX(uint8_t operand)
+{
 	++cpu.regs.x;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.x, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.x;
@@ -356,7 +398,8 @@ static uint8_t INX(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t INY(uint8_t operand) {
+static uint8_t INY(uint8_t operand)
+{
 	--cpu.regs.y;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.y, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.y;
@@ -364,16 +407,19 @@ static uint8_t INY(uint8_t operand) {
 	return 0;
 }
 
-static void JMP(uint16_t operand) {
+static void JMP(uint16_t operand)
+{
 	cpu.regs.pc = operand;
 }
 
-static void JSR(uint16_t operand) {
+static void JSR(uint16_t operand)
+{
 	stack_push_word(cpu.regs.pc + 3);
 	cpu.regs.pc = operand;
 }
 
-static uint8_t LSR(uint8_t operand) {
+static uint8_t LSR(uint8_t operand)
+{
 	uint8_t result;
 
 	cpu.regs.p.bits.carry = testbit(operand, 0);
@@ -384,17 +430,20 @@ static uint8_t LSR(uint8_t operand) {
 	return result;
 }
 
-static uint8_t NOP(uint8_t operand) {
+static uint8_t NOP(uint8_t operand)
+{
 	return 0;
 }
 
-static uint8_t PHA(uint8_t operand) {
+static uint8_t PHA(uint8_t operand)
+{
 	stack_push_byte(cpu.regs.a);
 
 	return 0;
 }
 
-static uint8_t PHP(uint8_t operand) {
+static uint8_t PHP(uint8_t operand)
+{
 	cpu.regs.p.bits.brk = SR_BRK_ON;
 	stack_push_byte(cpu.regs.p.value);
 	cpu.regs.p.bits.brk = SR_BRK_OFF;
@@ -402,7 +451,8 @@ static uint8_t PHP(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t PLA(uint8_t operand) {
+static uint8_t PLA(uint8_t operand)
+{
 	cpu.regs.a = stack_pop_byte();
 	cpu.regs.p.bits.negative = testbit(cpu.regs.a, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.a;
@@ -410,13 +460,15 @@ static uint8_t PLA(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t PLP(uint8_t operand) {
+static uint8_t PLP(uint8_t operand)
+{
 	cpu.regs.p.value = (cpu.regs.p.value & 0x30) | (stack_pop_byte() & 0xcf); /* Ignore bits brk and 5. */
 
 	return 0;
 }
 
-static uint8_t ROL(uint8_t operand) {
+static uint8_t ROL(uint8_t operand)
+{
 	uint8_t result;
 
 	if (cpu.regs.p.bits.carry) {
@@ -434,7 +486,8 @@ static uint8_t ROL(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t ROR(uint8_t operand) {
+static uint8_t ROR(uint8_t operand)
+{
 	uint8_t result;
 
 	if (cpu.regs.p.bits.carry) {
@@ -453,20 +506,23 @@ static uint8_t ROR(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t RTI(uint8_t operand) {
+static uint8_t RTI(uint8_t operand)
+{
 	cpu.regs.p.value = (cpu.regs.p.value & 0x30) | (stack_pop_byte() & 0xcf); /* Perserve bits 4 and 5*/
 	cpu.regs.pc = stack_pop_word();
 
 	return 0;
 }
 
-static uint8_t RTS(uint8_t operand) {
+static uint8_t RTS(uint8_t operand)
+{
 	cpu.regs.pc = stack_pop_word();
 
 	return 0;
 }
 
-static uint8_t SBC(uint8_t operand) {
+static uint8_t SBC(uint8_t operand)
+{
 	uint8_t result = operand;
 
 	if (!cpu.regs.p.bits.carry)
@@ -483,35 +539,42 @@ static uint8_t SBC(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t STA(uint8_t operand) {
+static uint8_t STA(uint8_t operand)
+{
 	return cpu.regs.a;
 }
 
-static uint8_t STX(uint8_t operand) {
+static uint8_t STX(uint8_t operand)
+{
 	return cpu.regs.x;
 }
 
-static uint8_t STY(uint8_t operand) {
+static uint8_t STY(uint8_t operand)
+{
 	return cpu.regs.x;
 }
 
-static uint8_t SEC(uint8_t operand) {
+static uint8_t SEC(uint8_t operand)
+{
 	cpu.regs.p.bits.carry = SR_CARRY_ON;
 
 	return 0;
 }
 
-static uint8_t SED(uint8_t operand) {
+static uint8_t SED(uint8_t operand)
+{
 	return 0;
 }
 
-static uint8_t SEI(uint8_t operand) {
+static uint8_t SEI(uint8_t operand)
+{
 	cpu.regs.p.bits.irq = SR_IRQ_DISABLED;
 
 	return 0;
 }
 
-static uint8_t TAX(uint8_t operand) {
+static uint8_t TAX(uint8_t operand)
+{
 	cpu.regs.x = cpu.regs.a;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.a, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.a;
@@ -519,7 +582,8 @@ static uint8_t TAX(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t TAY(uint8_t operand) {
+static uint8_t TAY(uint8_t operand)
+{
 	cpu.regs.y = cpu.regs.a;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.a, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.a;
@@ -527,7 +591,8 @@ static uint8_t TAY(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t TSX(uint8_t operand) {
+static uint8_t TSX(uint8_t operand)
+{
 	cpu.regs.x = cpu.regs.s;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.x, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.x;
@@ -535,7 +600,8 @@ static uint8_t TSX(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t TXA(uint8_t operand) {
+static uint8_t TXA(uint8_t operand)
+{
 	cpu.regs.a = cpu.regs.x;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.a, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.a;
@@ -543,7 +609,8 @@ static uint8_t TXA(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t TYA(uint8_t operand) {
+static uint8_t TYA(uint8_t operand)
+{
 	cpu.regs.a = cpu.regs.y;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.a, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.a;
@@ -551,7 +618,8 @@ static uint8_t TYA(uint8_t operand) {
 	return 0;
 }
 
-static uint8_t TXS(uint8_t operand) {
+static uint8_t TXS(uint8_t operand)
+{
 	cpu.regs.s = cpu.regs.x;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.x, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.x;
@@ -847,7 +915,7 @@ static struct instruction_handler_data opcode_to_handler_data[] = {
 		.addressing_mode = DP,
 		.instruction_destination = MEMORY,
 	},
-	[0x69] = {
+	[0x68] = {
 		.instruction_impl = PLA,
 		.addressing_mode = IMPLIED,
 		.instruction_destination = CPU_REGISTER,
@@ -1311,12 +1379,14 @@ static address_translator address_translators[] = {
 	[DP_INDIRECT_Y] = get_address_dpindy
 };
 
-static void ext_instruction_handler(const struct instruction_handler_data_ext *data, uint16_t operand) {
+static void ext_instruction_handler(const struct instruction_handler_data_ext *data, uint16_t operand)
+{
 	uint16_t operand_addr = address_translators[data->addressing_mode](operand);
 	data->instruction_impl(operand_addr);
 }
 
-static uint8_t get_insn_size(const struct instruction_handler_data *data) {
+static uint8_t get_insn_size(const struct instruction_handler_data *data)
+{
 	if (data->instruction_destination == CPU_REGISTER_PC)
 		return 0;
 
@@ -1345,7 +1415,8 @@ static uint8_t get_insn_size(const struct instruction_handler_data *data) {
 }
 
 /* Generic handler for instructions. */
-static void instruction_handler(const struct instruction_handler_data *data, uint16_t operand) {
+static void instruction_handler(const struct instruction_handler_data *data, uint16_t operand)
+{
 	uint16_t operand_address;
 	uint8_t result;
 
@@ -1370,13 +1441,15 @@ static void instruction_handler(const struct instruction_handler_data *data, uin
 	cpu.regs.pc += get_insn_size(data);
 }
 
-static void fetch_instruction(unsigned char *insn_data, uint16_t addr) {
+static void fetch_instruction(unsigned char *insn_data, uint16_t addr)
+{
 	insn_data[0] = mem_read(addr);
 	insn_data[1] = mem_read(addr + 1);
 	insn_data[2] = mem_read(addr + 2);
 }
 
-void execution_loop(void) {
+void execution_loop(void)
+{
 	struct instruction_description desc;
 	uint16_t first_insn_addr;
 	unsigned char insn_data[MAX_INSN_SIZE];
@@ -1394,15 +1467,16 @@ void execution_loop(void) {
 			ext_instruction_handler(&opcode_to_handler_data_ext[desc.opcode], desc.operand);
 		else
 			instruction_handler(&opcode_to_handler_data[desc.opcode], desc.operand);
-		
+
 		++cpu.executed_instructions;
-		
+
 		fetch_instruction(next, cpu.regs.pc);
 		fetch_instruction(insn_data, cpu.regs.pc);
 	}
 }
 
-int cpu_power_on(enum memory_mode mem_mode) {
+int cpu_power_on(enum memory_mode mem_mode)
+{
 	int i;
 
 	mmu_configure(mem_mode);
@@ -1426,7 +1500,8 @@ int cpu_power_on(enum memory_mode mem_mode) {
 	return 0;
 }
 
-int cpu_reset(void) {
+int cpu_reset(void)
+{
 	if (!cpu.is_powered_on) {
 		return -1;
 	}

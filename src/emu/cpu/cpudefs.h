@@ -4,7 +4,7 @@
 
 #pragma once
 
-/* The memory mode. */
+ /* The memory mode. */
 enum memory_mode {
 	NROM128,
 	NROM256

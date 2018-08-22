@@ -7,16 +7,16 @@
 
 #include <stdint.h>
 
-/* Maximum size of an instruction in bytes. */
+ /* Maximum size of an instruction in bytes. */
 #define MAX_INSN_SIZE 3
 
 /*
  * Metadata about 2A03 instructions.
  */
 struct instruction_description {
-    uint8_t opcode;
-    uint8_t instruction_size;
-    uint16_t operand;
+	uint8_t opcode;
+	uint8_t instruction_size;
+	uint16_t operand;
 };
 
 /**
@@ -27,9 +27,9 @@ struct instruction_description {
  * @return 0 If parsing was successful, -1 otherwise.
  */
 int parser_get_instruction_description(
-        unsigned char *buff,
-        size_t buff_size,
-        struct instruction_description *desc);
+	unsigned char *buff,
+	size_t buff_size,
+	struct instruction_description *desc);
 
 /**
  * Get the size of the instruction in the given buffer.

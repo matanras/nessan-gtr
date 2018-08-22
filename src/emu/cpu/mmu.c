@@ -15,14 +15,16 @@ static enum memory_mode memory_mode;
 * @param max The maximum address of the range.
 * @returns True whether addr is or above min and is or below max.
 */
-static inline bool is_in_range(uint16_t addr, uint16_t min, uint16_t max) {
+static inline bool is_in_range(uint16_t addr, uint16_t min, uint16_t max)
+{
 	return addr >= min && addr <= max;
 }
 
 /**
 * Translate the address according to the memory mode.
 */
-static uint16_t translate_address(uint16_t addr) {
+static uint16_t translate_address(uint16_t addr)
+{
 
 	if (is_in_range(addr, MEMREGION_SYSTEM_BEGIN, MEMREGION_SYSTEM_END)) {
 		addr %= 2048;
@@ -39,7 +41,8 @@ static uint16_t translate_address(uint16_t addr) {
 	return addr;
 }
 
-void mmu_configure(const enum memory_mode mode) {
+void mmu_configure(const enum memory_mode mode)
+{
 	memory_mode = mode;
 }
 
@@ -48,10 +51,12 @@ void mmu_configure(const enum memory_mode mode) {
 * @param addr The address to read from.
 * @return The word in the given address.
 */
-uint8_t mem_read(uint16_t addr) {
+uint8_t mem_read(uint16_t addr)
+{
 	return ram_read(translate_address(addr));
 }
 
-void mem_write(uint16_t addr, uint8_t value) {
+void mem_write(uint16_t addr, uint8_t value)
+{
 	ram_write(translate_address(addr), value);
 }

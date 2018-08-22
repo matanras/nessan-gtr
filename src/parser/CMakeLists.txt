@@ -1,1 +1,0 @@
-add_library(parser STATIC parser.c ../../include/nessan-gtr/parser.h)
