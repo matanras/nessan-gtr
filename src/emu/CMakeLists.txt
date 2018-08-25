@@ -1,7 +1,11 @@
+include_directories(include)
+
 add_executable(emu
 	main.c
 	emu.c
 	emu.h
+	${CMAKE_CURRENT_SOURCE_DIR}/include/log.h
+	${CMAKE_CURRENT_SOURCE_DIR}/log/log.c
 	${CMAKE_CURRENT_SOURCE_DIR}/cpu/parser.h
 	${CMAKE_CURRENT_SOURCE_DIR}/cpu/parser.c
 	${CMAKE_CURRENT_SOURCE_DIR}/cpu/cpu.c
