@@ -400,7 +400,7 @@ static uint8_t INX(uint8_t operand)
 
 static uint8_t INY(uint8_t operand)
 {
-	--cpu.regs.y;
+	++cpu.regs.y;
 	cpu.regs.p.bits.negative = testbit(cpu.regs.y, 7);
 	cpu.regs.p.bits.zero = !cpu.regs.y;
 
@@ -1453,7 +1453,6 @@ void execution_loop(void)
 	struct instruction_description desc;
 	uint16_t first_insn_addr;
 	unsigned char insn_data[MAX_INSN_SIZE];
-	unsigned char next[MAX_INSN_SIZE];
 
 	/* Jump to address in reset vector and begin executing. */
 	first_insn_addr = mem_read(ADDR_RESET_VEC);
@@ -1470,7 +1469,7 @@ void execution_loop(void)
 
 		++cpu.executed_instructions;
 
-		fetch_instruction(next, cpu.regs.pc);
+
 		fetch_instruction(insn_data, cpu.regs.pc);
 	}
 }

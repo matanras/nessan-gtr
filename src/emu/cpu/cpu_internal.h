@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <log.h>
 
 /* CPU memory mapped registers. */
 #define REG_SQ1_VOL           0x4000
@@ -81,6 +82,7 @@ struct cpu {
 	bool is_powered_on;
 	long long executed_instructions;
 	struct cpu_registers regs;
+	logger_t *logger;
 };
 
 enum addressing_mode {
