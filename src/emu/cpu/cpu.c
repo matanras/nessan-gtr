@@ -49,28 +49,25 @@ static void hwbp_add(uint16_t addr, hwbp_handler handler)
 {
 	struct hwbp *bp_iter = cpu.hwbp_list;
 
-	if (bp_iter == NULL)
-	{
+	if (bp_iter == NULL) {
 		bp_iter = malloc(sizeof(struct hwbp));
 		bp_iter->addr = addr;
 		bp_iter->handler = handler;
 		bp_iter->next = NULL;
 		cpu.hwbp_list = bp_iter;
 	}
-	else
-	{
+	else {
 		struct hwbp *new_bp;
 
 		while (bp_iter->next != NULL)
 			bp_iter = bp_iter->next;
-		
+
 		new_bp = malloc(sizeof(struct hwbp));
 		new_bp->addr = addr;
 		new_bp->next = NULL;
 		new_bp->handler = handler;
 		bp_iter->next = new_bp;
 	}
-		
 }
 
 /**
@@ -85,15 +82,13 @@ static void hwbp_remove(uint16_t addr)
 	if (cpu.hwbp_list == NULL)
 		return;
 
-	if (cpu.hwbp_list->addr == addr)
-	{
+	if (cpu.hwbp_list->addr == addr) {
 
 		deleted_bp = cpu.hwbp_list;
 		cpu.hwbp_list = cpu.hwbp_list->next;
 		free(deleted_bp);
 	}
-	else
-	{
+	else {
 		bp_iter = cpu.hwbp_list;
 
 		while (bp_iter->next != NULL || bp_iter->next->addr != addr)
@@ -121,8 +116,7 @@ static void hwbp_clear_all(void)
 
 	bp_iter = cpu.hwbp_list;
 
-	while (bp_iter->next != NULL)
-	{
+	while (bp_iter->next != NULL) {
 		deleted_bp = bp_iter;
 		bp_iter = bp_iter->next;
 		free(deleted_bp);
@@ -1513,26 +1507,26 @@ static uint8_t get_insn_size(const struct instruction_handler_data *data)
 		return 0;
 
 	switch (data->addressing_mode) {
-		case IMPLIED:
-		case ACCUMULATOR:
-			return 1;
+	case IMPLIED:
+	case ACCUMULATOR:
+		return 1;
 
-		case DP:
-		case DP_X:
-		case DP_Y:
-		case IMMEDIATE:
-		case DP_INDIRECT_X:
-		case DP_INDIRECT_Y:
-			return 2;
+	case DP:
+	case DP_X:
+	case DP_Y:
+	case IMMEDIATE:
+	case DP_INDIRECT_X:
+	case DP_INDIRECT_Y:
+		return 2;
 
-		case ABSOLUTE:
-		case ABSOLUTE_X:
-		case ABSOLUTE_Y:
-			return 3;
+	case ABSOLUTE:
+	case ABSOLUTE_X:
+	case ABSOLUTE_Y:
+		return 3;
 
-		default:
-			/* Should never reach here. */
-			return 0;
+	default:
+		/* Should never reach here. */
+		return 0;
 	}
 }
 
@@ -1629,7 +1623,7 @@ int cpu_reset(void)
 	if (!cpu.is_powered_on) {
 		return -1;
 	}
-	
+
 	cpu.regs.s -= 3;
 	cpu.regs.p.bits.irq = SR_IRQ_DISABLED;
 	mem_write(REG_SND_CHN, 0); /* Disable sound channels. */
