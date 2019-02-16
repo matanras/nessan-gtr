@@ -1587,7 +1587,6 @@ void execution_loop(void)
 
 		++cpu.executed_instructions;
 
-
 		fetch_instruction(insn_data, cpu.regs.pc);
 	}
 }
