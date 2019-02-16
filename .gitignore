@@ -45,3 +45,4 @@
 /.vs
 
 bin/
+/src/.vs

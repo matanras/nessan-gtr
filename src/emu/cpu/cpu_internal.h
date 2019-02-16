@@ -77,12 +77,27 @@ struct cpu_registers {
 	uint8_t y; /* Indexer 2. */
 };
 
+typedef void(*hwbp_handler)(uint16_t addr);
+
 /* The state of the CPU. */
 struct cpu {
 	bool is_powered_on;
 	long long executed_instructions;
 	struct cpu_registers regs;
 	logger_t *logger;
+
+	/* A mechanism used to detect access to specific memory addresses. Used for debug purposes. */
+	struct hwbp
+	{
+		/* The address the hardware breakpoint will trigger at. */
+		uint16_t addr;
+
+		/* Pointer to the next hardware breakpoint descriptor. */
+		struct hwbp *next;
+
+		/* A handler that will be fired when the hardware breakpoint is tirggered. */
+		hwbp_handler handler;
+	} *hwbp_list;
 };
 
 enum addressing_mode {

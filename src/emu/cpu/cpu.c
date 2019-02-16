@@ -5,8 +5,131 @@
 #include "cpu_internal.h"
 #include "mmu.h"
 #include "parser.h"
+#include "log.h"
+#include <stdlib.h>
 
 #define ZERO_PAGE_LIMIT 0x100
+
+static struct cpu cpu;
+
+/**
+ * Find the hardware breakpoint descriptor associated with the given address.
+ * @param addr The addr of the hardware breakpoint.
+ * @return The hardware breakpoint descriptor associated with the given address.
+ */
+static struct hwbp *hwbp_find(uint16_t addr)
+{
+	struct hwbp *hwbp_iter = cpu.hwbp_list;
+
+	while (hwbp_iter != NULL && hwbp_iter->addr != addr)
+		hwbp_iter = hwbp_iter->next;
+
+	return hwbp_iter;
+}
+
+/**
+ * Try to find a hardawre breakpoint associated with the given address.
+ * If such a breakpoint is found, trigger it.
+ * @param addr The adress to break on.
+ */
+static void hwbp_find_and_execute(uint16_t addr)
+{
+	struct hwbp *bp = hwbp_find(addr);
+
+	if (bp != NULL && bp->addr == addr)
+		bp->handler(addr);
+}
+
+/**
+ * Add a hardware breakpoint.
+ * @param addr The address the breakpoint will trigger on.
+ * @param handler A handler to be executed when the breakpoint is triggered.
+ */
+static void hwbp_add(uint16_t addr, hwbp_handler handler)
+{
+	struct hwbp *bp_iter = cpu.hwbp_list;
+
+	if (bp_iter == NULL)
+	{
+		bp_iter = malloc(sizeof(struct hwbp));
+		bp_iter->addr = addr;
+		bp_iter->handler = handler;
+		bp_iter->next = NULL;
+		cpu.hwbp_list = bp_iter;
+	}
+	else
+	{
+		struct hwbp *new_bp;
+
+		while (bp_iter->next != NULL)
+			bp_iter = bp_iter->next;
+		
+		new_bp = malloc(sizeof(struct hwbp));
+		new_bp->addr = addr;
+		new_bp->next = NULL;
+		new_bp->handler = handler;
+		bp_iter->next = new_bp;
+	}
+		
+}
+
+/**
+ * Remove a hardware breakpoint.
+ * @param addr The address on which to break.
+ */
+static void hwbp_remove(uint16_t addr)
+{
+	struct hwbp *bp_iter;
+	struct hwbp *deleted_bp;
+
+	if (cpu.hwbp_list == NULL)
+		return;
+
+	if (cpu.hwbp_list->addr == addr)
+	{
+
+		deleted_bp = cpu.hwbp_list;
+		cpu.hwbp_list = cpu.hwbp_list->next;
+		free(deleted_bp);
+	}
+	else
+	{
+		bp_iter = cpu.hwbp_list;
+
+		while (bp_iter->next != NULL || bp_iter->next->addr != addr)
+			bp_iter = bp_iter->next;
+
+		// given addr not found in breakpoints list
+		if (bp_iter->next == NULL)
+			return;
+
+		deleted_bp = bp_iter->next;
+		// unlink found breakpoint
+		bp_iter->next = deleted_bp->next;
+		// free it
+		free(deleted_bp);
+	}
+}
+
+/**
+ * Clear all hardware breakpoints.
+ */
+static void hwbp_clear_all(void)
+{
+	struct hwbp *bp_iter;
+	struct hwbp *deleted_bp;
+
+	bp_iter = cpu.hwbp_list;
+
+	while (bp_iter->next != NULL)
+	{
+		deleted_bp = bp_iter;
+		bp_iter = bp_iter->next;
+		free(deleted_bp);
+	}
+
+	free(bp_iter);
+}
 
 /**
 * Test if the bit at the given index is set.
@@ -20,8 +143,6 @@ static inline int testbit(uint8_t n, uint8_t index)
 
 	return (n & (1 << index)) >> index;
 }
-
-static struct cpu cpu;
 
 static void stack_push_byte(uint8_t byte)
 {
@@ -120,7 +241,7 @@ static inline uint16_t get_address_dpindx(uint16_t addr)
 */
 static inline uint16_t get_address_dpindy(uint16_t addr)
 {
-	return mem_read(addr) + cpu.regs.y;
+	return (mem_read(addr) | (mem_read(addr + 1) << 8)) + cpu.regs.y;
 }
 
 static uint8_t ASL(uint8_t operand)
@@ -1382,6 +1503,7 @@ static address_translator address_translators[] = {
 static void ext_instruction_handler(const struct instruction_handler_data_ext *data, uint16_t operand)
 {
 	uint16_t operand_addr = address_translators[data->addressing_mode](operand);
+	hwbp_find_and_execute(operand_addr);
 	data->instruction_impl(operand_addr);
 }
 
@@ -1428,6 +1550,7 @@ static void instruction_handler(const struct instruction_handler_data *data, uin
 	}
 	else {
 		operand_address = address_translators[data->addressing_mode](operand);
+		hwbp_find_and_execute(operand_address);
 
 		if (data->instruction_destination == CPU_REGISTER) {
 			data->instruction_impl(mem_read(operand_address));
@@ -1439,6 +1562,8 @@ static void instruction_handler(const struct instruction_handler_data *data, uin
 	}
 
 	cpu.regs.pc += get_insn_size(data);
+	/* fire hardware breakpoint on new PC. */
+	hwbp_find_and_execute(cpu.regs.pc);
 }
 
 static void fetch_instruction(unsigned char *insn_data, uint16_t addr)
@@ -1460,7 +1585,6 @@ void execution_loop(void)
 	cpu.regs.pc = first_insn_addr;
 
 	fetch_instruction(insn_data, cpu.regs.pc);
-
 	while (parser_get_instruction_description(insn_data, MAX_INSN_SIZE, &desc) == 0) {
 		if (opcode_to_handler_data_ext[desc.opcode].instruction_impl)
 			ext_instruction_handler(&opcode_to_handler_data_ext[desc.opcode], desc.operand);
@@ -1478,6 +1602,7 @@ int cpu_power_on(enum memory_mode mem_mode)
 {
 	int i;
 
+	cpu.hwbp_list = NULL;
 	mmu_configure(mem_mode);
 
 	cpu.regs.a = 0;
@@ -1504,7 +1629,7 @@ int cpu_reset(void)
 	if (!cpu.is_powered_on) {
 		return -1;
 	}
-
+	
 	cpu.regs.s -= 3;
 	cpu.regs.p.bits.irq = SR_IRQ_DISABLED;
 	mem_write(REG_SND_CHN, 0); /* Disable sound channels. */
